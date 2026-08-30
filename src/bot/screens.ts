@@ -102,10 +102,38 @@ export function settingsText(
   const s =
     getSettings(telegramId);
 
+  const tp =
+    JSON.parse(s.tp_tiers);
+
+  const tpText = tp
+    .map(
+      (tier: any) =>
+        `+${tier.profit}% → sell ${tier.sellPercent}%`
+    )
+    .join("\n");
+
   return `
 ⚙️ <b>AUTO SETTINGS</b>
 
-Tap any parameter to adjust it.
+Tap any parameter below to adjust it.
+
+💰 Max Buy: <b>${s.max_buy} SOL</b>
+📉 Slippage: <b>${s.slippage}%</b>
+
+🎯 Take Profit:
+${tpText}
+
+🛑 Stop Loss: <b>-${s.stop_loss}%</b>
+📈 Trailing After: <b>+${s.trailing_after}%</b>
+↘️ Trailing Pullback: <b>${s.trailing_pullback}%</b>
+⏱ Time Stop: <b>${s.time_stop_minutes} min</b>
+
+💥 Daily Loss Cap: <b>${s.daily_loss_cap} SOL</b>
+⚡ Max Trades: <b>${s.max_trades_hour}/hour · ${s.max_trades_day}/day</b>
+
+🧠 Smart Money Boost: <b>${
+    s.smart_money_boost ? "ON" : "OFF"
+  }</b>
 `.trim();
 }
 
