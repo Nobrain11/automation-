@@ -1,46 +1,50 @@
-db.exec(`
-  CREATE TABLE IF NOT EXISTS discovered_tokens (
-    mint TEXT PRIMARY KEY,
+import { db } from "./sqlite.js";
 
-    name TEXT,
-    symbol TEXT,
-    uri TEXT,
+export function runMigrations(): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS discovered_tokens (
+      mint TEXT PRIMARY KEY,
 
-    creator TEXT,
+      name TEXT,
+      symbol TEXT,
+      uri TEXT,
 
-    discovered_at INTEGER NOT NULL,
-    age_seconds INTEGER NOT NULL,
+      creator TEXT,
 
-    bonding_curve TEXT,
-    is_bonding_curve INTEGER NOT NULL DEFAULT 0,
+      discovered_at INTEGER NOT NULL,
+      age_seconds INTEGER NOT NULL,
 
-    mint_authority_revoked INTEGER NOT NULL DEFAULT 0,
-    freeze_authority_revoked INTEGER NOT NULL DEFAULT 0,
+      bonding_curve TEXT,
+      is_bonding_curve INTEGER NOT NULL DEFAULT 0,
 
-    top10_percent REAL,
+      mint_authority_revoked INTEGER NOT NULL DEFAULT 0,
+      freeze_authority_revoked INTEGER NOT NULL DEFAULT 0,
 
-    curve_liquidity_sol REAL,
+      top10_percent REAL,
 
-    volume_1m_usd REAL,
+      curve_liquidity_sol REAL,
 
-    creator_dumping INTEGER NOT NULL DEFAULT 0,
+      volume_1m_usd REAL,
 
-    smart_money_override INTEGER NOT NULL DEFAULT 0,
+      creator_dumping INTEGER NOT NULL DEFAULT 0,
 
-    passed INTEGER NOT NULL DEFAULT 0,
+      smart_money_override INTEGER NOT NULL DEFAULT 0,
 
-    rejection_reasons TEXT NOT NULL DEFAULT '[]'
-  );
+      passed INTEGER NOT NULL DEFAULT 0,
 
-  CREATE INDEX IF NOT EXISTS
-    idx_discovered_tokens_time
-    ON discovered_tokens(discovered_at);
+      rejection_reasons TEXT NOT NULL DEFAULT '[]'
+    );
 
-  CREATE INDEX IF NOT EXISTS
-    idx_discovered_tokens_passed
-    ON discovered_tokens(passed);
+    CREATE INDEX IF NOT EXISTS
+      idx_discovered_tokens_time
+      ON discovered_tokens(discovered_at);
 
-  CREATE INDEX IF NOT EXISTS
-    idx_discovered_tokens_creator
-    ON discovered_tokens(creator);
-`);
+    CREATE INDEX IF NOT EXISTS
+      idx_discovered_tokens_passed
+      ON discovered_tokens(passed);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_discovered_tokens_creator
+      ON discovered_tokens(creator);
+  `);
+}
