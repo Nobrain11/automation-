@@ -220,3 +220,86 @@ export function walletKeyboard() {
       "home"
     );
 }
+
+// ─── Education center (via Help — not on main homepage) ──
+
+export function eduHomeKeyboard() {
+  return new InlineKeyboard()
+    .text("ℹ️ How It Works", "edu:how")
+    .text("⚠️ Risks", "edu:risks")
+    .row()
+    .text("📊 Live Performance", "pnl")
+    .text("🤖 Strategy", "edu:strategy")
+    .row()
+    .text("❓ FAQ", "edu:faq")
+    .text("🔒 Security", "edu:security")
+    .row()
+    .text("💬 Support", "support")
+    .text("↩️ Back", "home");
+}
+
+export function eduHowKeyboard() {
+  return new InlineKeyboard()
+    .text("📊 Status", "status")
+    .text("🤖 Strategy", "edu:strategy")
+    .row()
+    .text("↩️ Back", "help");
+}
+
+export function eduRisksKeyboard() {
+  return new InlineKeyboard()
+    .text("⚙️ Risk Settings", "settings")
+    .text("📊 Status", "status")
+    .row()
+    .text("↩️ Back", "help");
+}
+
+export function eduStrategyKeyboard() {
+  return new InlineKeyboard()
+    .text("⚙️ Change Strategy", "settings")
+    .text("↩️ Back", "help");
+}
+
+export function eduSecurityKeyboard() {
+  return new InlineKeyboard()
+    .text("💼 Wallet", "wallet:menu")
+    .text("↩️ Back", "help");
+}
+
+export function eduFaqListKeyboard() {
+  return new InlineKeyboard()
+    .text("1. What does it do?", "faq:1")
+    .row()
+    .text("2. Guarantee profit?", "faq:2")
+    .row()
+    .text("3. When does it buy?", "faq:3")
+    .row()
+    .text("4. Why reject a token?", "faq:4")
+    .row()
+    .text("5. Stop immediately?", "faq:5")
+    .row()
+    .text("6. Open positions on stop?", "faq:6")
+    .row()
+    .text("7. How much SOL?", "faq:7")
+    .row()
+    .text("8. Where are trades?", "faq:8")
+    .row()
+    .text("9. Can it withdraw?", "faq:9")
+    .row()
+    .text("10. Failed transaction?", "faq:10")
+    .row()
+    .text("↩️ Back", "help");
+}
+
+export function faqAnswerKeyboard() {
+  return new InlineKeyboard()
+    .text("← Questions", "edu:faq")
+    .text("↩️ Back", "help");
+}
+
+export function stopConfirmKeyboard() {
+  return new InlineKeyboard()
+    .text("⏹ Confirm Stop", "auto:stop:confirm")
+    .row()
+    .text("❌ Cancel", "home");
+}
