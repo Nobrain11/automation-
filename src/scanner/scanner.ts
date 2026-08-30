@@ -1,4 +1,4 @@
-// scanner.ts
+// scanner.ts — replaces src/scanner/scanner.ts
 
 import {
   Connection,
@@ -18,6 +18,10 @@ import {
   findPumpCreateInstruction,
   RawInstructionLike
 } from "./pumpfun-decoder.js";
+
+import {
+  computeTop10Percent
+} from "./holder-analysis.js";
 
 import {
   TokenCandidate,
@@ -292,11 +296,6 @@ export class PumpScanner {
       );
 
     if (!createIx) {
-      /*
-       * Not a real Pump.fun token creation —
-       * the log heuristic can false-positive
-       * on other pump.fun program interactions.
-       */
       return null;
     }
 
@@ -367,12 +366,6 @@ export class PumpScanner {
       mintData.freezeAuthority ??
       null;
 
-    /*
-     * Fetch and decode the real bonding curve account.
-     * This is the authoritative source for curve
-     * liquidity/reserves. We never fabricate these.
-     */
-
     let isBondingCurve = false;
     let curveLiquiditySol: number | null = null;
 
@@ -406,6 +399,13 @@ export class PumpScanner {
       }
     }
 
+    const top10Percent =
+      await computeTop10Percent(
+        this.connection,
+        mint,
+        decoded.associatedBondingCurve
+      );
+
     const token: TokenCandidate = {
       mint,
 
@@ -431,7 +431,7 @@ export class PumpScanner {
       freezeAuthorityRevoked:
         freezeAuthority === null,
 
-      top10Percent: null,
+      top10Percent,
 
       curveLiquiditySol,
 
@@ -445,13 +445,6 @@ export class PumpScanner {
 
       rejectionReasons: []
     };
-
-    /*
-     * Remaining fields (top10Percent, volume1mUsd,
-     * creatorDumping, smartMoneyOverride) are filled
-     * in by later scanner substages — never fabricated
-     * here.
-     */
 
     return token;
   }
