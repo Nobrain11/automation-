@@ -1,3 +1,5 @@
+// src/bot/keyboards.ts — REPLACE existing file
+
 import { InlineKeyboard } from "grammy";
 
 export function onboardingKeyboard() {
@@ -73,10 +75,9 @@ export function settingsKeyboard(
 
   return new InlineKeyboard()
     .text(
-      `💰 Max Buy: ${settings.max_buy} SOL`,
+      `💰 Max Buy: ${settings.max_buy}`,
       "setting:max_buy"
     )
-    .row()
     .text(
       `📉 Slippage: ${settings.slippage}%`,
       "setting:slippage"
@@ -88,12 +89,11 @@ export function settingsKeyboard(
     )
     .row()
     .text(
-      `🛑 Stop Loss: -${settings.stop_loss}%`,
+      `🛑 SL: -${settings.stop_loss}%`,
       "setting:stop_loss"
     )
-    .row()
     .text(
-      `📈 Trailing After: +${settings.trailing_after}%`,
+      `📈 Trail: +${settings.trailing_after}%`,
       "setting:trailing_after"
     )
     .row()
@@ -101,33 +101,31 @@ export function settingsKeyboard(
       `↘️ Pullback: ${settings.trailing_pullback}%`,
       "setting:trailing_pullback"
     )
-    .row()
     .text(
-      `⏱ Time Stop: ${settings.time_stop_minutes} min`,
+      `⏱ Time Stop: ${settings.time_stop_minutes}m`,
       "setting:time_stop_minutes"
     )
     .row()
     .text(
-      `💥 Daily Loss Cap: ${settings.daily_loss_cap} SOL`,
+      `💥 Loss Cap: ${settings.daily_loss_cap}`,
       "setting:daily_loss_cap"
     )
-    .row()
     .text(
-      `⚡ Max/Hour: ${settings.max_trades_hour}`,
-      "setting:max_trades_hour"
-    )
-    .text(
-      `📅 Max/Day: ${settings.max_trades_day}`,
-      "setting:max_trades_day"
-    )
-    .row()
-    .text(
-      `🧠 Smart Money: ${
+      `🧠 Smart$: ${
         settings.smart_money_boost
           ? "ON"
           : "OFF"
       }`,
       "setting:smart_money"
+    )
+    .row()
+    .text(
+      `⚡ Max/Hr: ${settings.max_trades_hour}`,
+      "setting:max_trades_hour"
+    )
+    .text(
+      `📅 Max/Day: ${settings.max_trades_day}`,
+      "setting:max_trades_day"
     )
     .row()
     .text(
