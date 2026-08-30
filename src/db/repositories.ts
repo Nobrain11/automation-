@@ -1,3 +1,5 @@
+// src/db/repositories.ts — REPLACE existing file
+
 import { db } from "./sqlite.js";
 
 export interface UserInfo {
@@ -39,6 +41,18 @@ export interface AutoSettings {
   kill_switch: number;
 
   updated_at: number;
+}
+
+export function userExists(
+  telegramId: number
+): boolean {
+  const row = db.prepare(`
+    SELECT 1
+    FROM users
+    WHERE telegram_id = ?
+  `).get(telegramId);
+
+  return row !== undefined;
 }
 
 export function ensureUser(
