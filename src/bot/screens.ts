@@ -137,6 +137,63 @@ ${tpText}
 `.trim();
 }
 
+export function pnlText(
+  telegramId: number
+) {
+  /*
+   * No trades have executed yet (auto entry/exit engine
+   * is Phase 4/5, not built). We show real zeros — never
+   * a fabricated PnL figure.
+   */
+
+  return `
+📈 <b>PNL</b>
+
+Realized PnL (today): <b>0 SOL</b>
+Realized PnL (all-time): <b>0 SOL</b>
+Unrealized PnL: <b>0 SOL</b>
+
+No trades have been executed yet.
+`.trim();
+}
+
+export function positionsText(
+  telegramId: number
+) {
+  /*
+   * No positions table/entry engine exists yet
+   * (Phase 4). Real, honest empty state.
+   */
+
+  return `
+📂 <b>OPEN POSITIONS</b>
+
+No open positions.
+
+Auto-trading entry is not active yet.
+`.trim();
+}
+
+export function supportText() {
+  const contact =
+    process.env.SUPPORT_CONTACT;
+
+  if (!contact) {
+    return `
+🛟 <b>SUPPORT</b>
+
+Support contact not configured yet.
+`.trim();
+  }
+
+  return `
+🛟 <b>SUPPORT</b>
+
+Need help? Reach out:
+${contact}
+`.trim();
+}
+
 export function statusText(
   telegramId: number
 ) {
