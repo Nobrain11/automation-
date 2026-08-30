@@ -7,6 +7,7 @@ export function runMigrations(): void {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       telegram_id INTEGER NOT NULL UNIQUE,
+      username TEXT,
       wallet_address TEXT,
       encrypted_private_key TEXT,
       auto_enabled INTEGER NOT NULL DEFAULT 0,
@@ -86,4 +87,24 @@ export function runMigrations(): void {
       idx_discovered_tokens_creator
       ON discovered_tokens(creator);
   `);
+
+  // --- Self-healing column migrations ---
+  // CREATE TABLE IF NOT EXISTS is a no-op on a table that already exists,
+  // so any column added to the schema above must also be added here for
+  // databases that were created before the column existed (e.g. on a
+  // persistent Railway volume from an earlier deploy).
+  addColumnIfMissing("users", "username", "TEXT");
+}
+
+function addColumnIfMissing(table: string, column: string, type: string): void {
+  const existing = db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all() as { name: string }[];
+
+  const hasColumn = existing.some((col) => col.name === column);
+
+  if (!hasColumn) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    console.log(`[migrations] Added missing column ${table}.${column}`);
+  }
 }
