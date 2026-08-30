@@ -1,3 +1,5 @@
+// src/bot/bot.ts — REPLACE existing file
+
 import {
   Bot,
   Context,
@@ -197,7 +199,7 @@ Connect a Solana wallet to continue.
 
     await render(
       ctx,
-      homeText(),
+      await homeText(id),
       mainKeyboard()
     );
   }
@@ -244,10 +246,6 @@ bot.on(
           id,
           null
         );
-
-        /*
-         * Best effort deletion.
-         */
 
         try {
           await ctx.api.deleteMessage(
@@ -451,7 +449,7 @@ bot.on(
 
         return render(
           ctx,
-          homeText(),
+          await homeText(id),
           mainKeyboard()
         );
       }
@@ -703,7 +701,7 @@ This removes the encrypted wallet from this bot.
         return render(
           ctx,
           `
-⚙️ <b>AUTO SETTINGS</b>
+⚙ <b>AUTO SETTINGS</b>
 
 Configure the automated strategy.
           `.trim(),
