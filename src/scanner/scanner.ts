@@ -1,3 +1,5 @@
+// scanner.ts
+
 import {
   Connection,
   Logs,
@@ -9,6 +11,13 @@ import {
   createConnection,
   extractCandidateFromLogs
 } from "./pumpfun.js";
+
+import {
+  decodeCreateInstruction,
+  decodeBondingCurveAccount,
+  findPumpCreateInstruction,
+  RawInstructionLike
+} from "./pumpfun-decoder.js";
 
 import {
   TokenCandidate,
@@ -214,14 +223,6 @@ export class PumpScanner {
       `Pump.fun candidate ${info.signature}`
     );
 
-    /*
-     * Actual token enrichment happens
-     * here in the next stage.
-     *
-     * We intentionally don't fabricate
-     * token information from logs.
-     */
-
     const token =
       await this.enrichCandidate(
         candidate.signature
@@ -233,23 +234,12 @@ export class PumpScanner {
 
     this.stats.evaluated++;
 
-    /*
-     * The user-specific settings are applied
-     * by the bot's auto-engine later.
-     *
-     * Scanner discovery itself remains global.
-     */
-
     saveTokenCandidate(token);
   }
 
   private async enrichCandidate(
     signature: string
   ): Promise<TokenCandidate | null> {
-    /*
-     * Fetch the real transaction from Solana.
-     */
-
     let transaction;
 
     try {
@@ -275,46 +265,59 @@ export class PumpScanner {
     }
 
     /*
-     * Locate token mint candidates
-     * from post-token balances.
+     * Find and decode the real Pump.fun "create"
+     * instruction. This is the authoritative source
+     * for name/symbol/uri/mint/bondingCurve — we do
+     * not guess these from token balances or logs.
      */
 
-    const balances =
-      transaction.meta
-        ?.postTokenBalances ?? [];
+    const rawInstructions: RawInstructionLike[] =
+      transaction.transaction.message.instructions
+        .filter(
+          (ix: any) =>
+            "data" in ix && "accounts" in ix
+        )
+        .map((ix: any) => ({
+          programId: new PublicKey(ix.programId),
+          accounts: ix.accounts.map(
+            (a: any) => new PublicKey(a)
+          ),
+          data: ix.data
+        }));
 
-    if (
-      balances.length === 0
-    ) {
+    const createIx =
+      findPumpCreateInstruction(
+        rawInstructions,
+        PUMP_PROGRAM_ID
+      );
+
+    if (!createIx) {
+      /*
+       * Not a real Pump.fun token creation —
+       * the log heuristic can false-positive
+       * on other pump.fun program interactions.
+       */
       return null;
     }
 
-    const mint =
-      balances[0]?.mint;
+    const decoded =
+      decodeCreateInstruction(createIx);
 
-    if (!mint) {
+    if (!decoded || !decoded.mint) {
+      logger.warn(
+        `Failed to decode create instruction for ${signature}`
+      );
+
       return null;
     }
 
-    /*
-     * Creator resolution.
-     *
-     * For now use the first signer.
-     * Deeper creator verification is
-     * performed by the holder-analysis
-     * stage.
-     */
-
-    const signer =
-      transaction.transaction.message
-        .accountKeys
-        .find(
-          (account: any) =>
-            account.signer
-        );
+    const mint = decoded.mint;
 
     const creator =
-      signer?.pubkey?.toBase58() ??
+      decoded.user ??
+      transaction.transaction.message.accountKeys.find(
+        (account: any) => account.signer
+      )?.pubkey?.toBase58() ??
       null;
 
     const blockTime =
@@ -331,10 +334,6 @@ export class PumpScanner {
             blockTime
         )
       );
-
-    /*
-     * Fetch mint account.
-     */
 
     let mintInfo;
 
@@ -368,12 +367,51 @@ export class PumpScanner {
       mintData.freezeAuthority ??
       null;
 
+    /*
+     * Fetch and decode the real bonding curve account.
+     * This is the authoritative source for curve
+     * liquidity/reserves. We never fabricate these.
+     */
+
+    let isBondingCurve = false;
+    let curveLiquiditySol: number | null = null;
+
+    if (decoded.bondingCurve) {
+      try {
+        const curveAccountInfo =
+          await this.connection.getAccountInfo(
+            new PublicKey(decoded.bondingCurve),
+            "confirmed"
+          );
+
+        if (curveAccountInfo?.data) {
+          const curve =
+            decodeBondingCurveAccount(
+              curveAccountInfo.data
+            );
+
+          if (curve) {
+            isBondingCurve = true;
+
+            curveLiquiditySol =
+              Number(curve.realSolReserves) /
+              1_000_000_000;
+          }
+        }
+      } catch (error) {
+        logger.warn(
+          `Failed to fetch bonding curve account for ${signature}`,
+          error
+        );
+      }
+    }
+
     const token: TokenCandidate = {
       mint,
 
-      name: null,
-      symbol: null,
-      uri: null,
+      name: decoded.name,
+      symbol: decoded.symbol,
+      uri: decoded.uri,
 
       creator,
 
@@ -382,16 +420,10 @@ export class PumpScanner {
 
       ageSeconds,
 
-      bondingCurve: null,
+      bondingCurve:
+        decoded.bondingCurve,
 
-      /*
-       * We only mark this true after
-       * explicit Pump.fun curve verification.
-       *
-       * Never assume every Pump.fun tx
-       * is a curve token.
-       */
-      isBondingCurve: false,
+      isBondingCurve,
 
       mintAuthorityRevoked:
         mintAuthority === null,
@@ -401,7 +433,7 @@ export class PumpScanner {
 
       top10Percent: null,
 
-      curveLiquiditySol: null,
+      curveLiquiditySol,
 
       volume1mUsd: null,
 
@@ -415,13 +447,10 @@ export class PumpScanner {
     };
 
     /*
-     * IMPORTANT:
-     *
-     * No fake "bonding curve = true"
-     * is inserted here.
-     *
-     * The Pump.fun account decoder comes
-     * in the next scanner substage.
+     * Remaining fields (top10Percent, volume1mUsd,
+     * creatorDumping, smartMoneyOverride) are filled
+     * in by later scanner substages — never fabricated
+     * here.
      */
 
     return token;
