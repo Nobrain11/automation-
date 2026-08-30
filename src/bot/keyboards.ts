@@ -46,8 +46,22 @@ export function mainKeyboard() {
     )
     .row()
     .text(
+      "📈 PnL",
+      "pnl"
+    )
+    .text(
+      "📂 Positions",
+      "positions"
+    )
+    .row()
+    .text(
       "🆘 Emergency Kill",
       "auto:kill"
+    )
+    .row()
+    .text(
+      "🛟 Support",
+      "support"
     );
 }
 
