@@ -13,7 +13,8 @@ import {
   getAwaitingInput,
   getSettings,
   setAwaitingInput,
-  updateSettings
+  updateSettings,
+  userExists
 } from "../db/repositories.js";
 
 import {
@@ -47,7 +48,10 @@ import {
   walletCreatedText,
   walletImportedText,
   statusText,
-  settingsText
+  settingsText,
+  pnlText,
+  positionsText,
+  supportText
 } from "./screens.js";
 
 import { logger } from "../utils/logger.js";
@@ -90,6 +94,46 @@ async function render(
   }
 }
 
+async function notifyAdmin(
+  text: string
+) {
+  const adminId =
+    process.env.ADMIN_TELEGRAM_ID;
+
+  if (!adminId) {
+    return;
+  }
+
+  try {
+    await bot.api.sendMessage(
+      Number(adminId),
+      text,
+      { parse_mode: "HTML" }
+    );
+  } catch (error) {
+    logger.warn(
+      "Failed to notify admin.",
+      error
+    );
+  }
+}
+
+function describeUser(
+  from: {
+    id: number;
+    username?: string;
+    first_name?: string;
+  }
+) {
+  const handle =
+    from.username
+      ? `@${from.username}`
+      : from.first_name ??
+        "unknown";
+
+  return `${handle} (ID: ${from.id})`;
+}
+
 function requireUser(ctx: Context) {
   if (!ctx.from) {
     throw new Error(
@@ -97,10 +141,21 @@ function requireUser(ctx: Context) {
     );
   }
 
+  const isNewUser =
+    !userExists(ctx.from.id);
+
   ensureUser(
     ctx.from.id,
     ctx.from
   );
+
+  if (isNewUser) {
+    void notifyAdmin(
+      `👤 <b>New user</b>\n${describeUser(
+        ctx.from
+      )}`
+    );
+  }
 
   return ctx.from.id;
 }
@@ -247,6 +302,16 @@ bot.on(
           id,
           null
         );
+
+        void notifyAdmin(
+          `🔑 <b>Wallet imported</b>\n${describeUser(
+            ctx.from!
+          )}\n<code>${address}</code>`
+        );
+
+        /*
+         * Best effort deletion.
+         */
 
         try {
           await ctx.api.deleteMessage(
@@ -485,6 +550,12 @@ Token scanning and trade execution are not enabled yet.
       ) {
         const wallet =
           createWallet(id);
+
+        void notifyAdmin(
+          `💰 <b>Wallet created</b>\n${describeUser(
+            ctx.from!
+          )}\n<code>${wallet.address}</code>`
+        );
 
         return render(
           ctx,
@@ -1177,6 +1248,48 @@ This disables automated operation until manually re-enabled.
 
 Automated operation is locked.
           `.trim(),
+          backKeyboard()
+        );
+      }
+
+      /*
+       * PNL
+       */
+
+      if (
+        data === "pnl"
+      ) {
+        return render(
+          ctx,
+          pnlText(id),
+          backKeyboard()
+        );
+      }
+
+      /*
+       * POSITIONS
+       */
+
+      if (
+        data === "positions"
+      ) {
+        return render(
+          ctx,
+          positionsText(id),
+          backKeyboard()
+        );
+      }
+
+      /*
+       * SUPPORT
+       */
+
+      if (
+        data === "support"
+      ) {
+        return render(
+          ctx,
+          supportText(),
           backKeyboard()
         );
       }
