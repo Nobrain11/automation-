@@ -46,7 +46,8 @@ import {
   homeText,
   walletCreatedText,
   walletImportedText,
-  statusText
+  statusText,
+  settingsText
 } from "./screens.js";
 
 import { logger } from "../utils/logger.js";
@@ -700,11 +701,7 @@ This removes the encrypted wallet from this bot.
       ) {
         return render(
           ctx,
-          `
-⚙ <b>AUTO SETTINGS</b>
-
-Configure the automated strategy.
-          `.trim(),
+          settingsText(id),
           settingsKeyboard(
             getSettings(id)
           )
@@ -1174,62 +1171,3 @@ This disables automated operation until manually re-enabled.
         );
 
         return render(
-          ctx,
-          `
-🛑 <b>EMERGENCY KILL ACTIVE</b>
-
-Automated operation is locked.
-          `.trim(),
-          backKeyboard()
-        );
-      }
-
-      /*
-       * STATUS
-       */
-
-      if (
-        data ===
-        "status"
-      ) {
-        return render(
-          ctx,
-          statusText(id),
-          new InlineKeyboard()
-            .text(
-              "📊 Refresh",
-              "status"
-            )
-            .row()
-            .text(
-              "↩️ Back",
-              "home"
-            )
-        );
-      }
-
-    } catch (error) {
-      logger.error(
-        "Callback error",
-        error instanceof Error
-          ? error.message
-          : error
-      );
-
-      await render(
-        ctx,
-        "❌ Something went wrong.",
-        backKeyboard()
-      );
-    }
-  }
-);
-
-bot.catch(
-  (error) => {
-    logger.error(
-      "Bot error",
-      error.error
-    );
-  }
-);
