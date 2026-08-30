@@ -1,15 +1,69 @@
+// src/bot/screens.ts — REPLACE existing file
+
 import {
   getSettings
 } from "../db/repositories.js";
 
-export function homeText() {
+import {
+  getAddress,
+  getBalance
+} from "../services/wallet.js";
+
+import {
+  scanner
+} from "../scanner/scanner-instance.js";
+
+export async function homeText(
+  telegramId: number
+): Promise<string> {
+  const s =
+    getSettings(telegramId);
+
+  const address =
+    getAddress(telegramId);
+
+  let balance = "unavailable";
+
+  if (address) {
+    try {
+      balance =
+        `${(
+          await getBalance(telegramId)
+        ).toFixed(4)} SOL`;
+    } catch {
+      balance = "unavailable";
+    }
+  }
+
+  const stats =
+    scanner.getStats();
+
+  const tradingLabel =
+    s.kill_switch
+      ? "🛑 KILL SWITCH ACTIVE"
+      : s.auto_state === "running"
+        ? "🟢 RUNNING"
+        : s.auto_state === "paused"
+          ? "🟡 PAUSED"
+          : "🔴 STOPPED";
+
   return `
 🚀 <b>PUMP AUTO</b>
 
 Button-driven Solana automation.
 
-Scanner: NOT ACTIVE
-Trading: NOT ACTIVE
+Wallet:
+<code>${address ?? "not connected"}</code>
+Balance: ${balance}
+
+Scanner: ${
+    stats.running
+      ? "🟢 ACTIVE"
+      : "🔴 NOT ACTIVE"
+  }
+Discovered: ${stats.discovered} · Evaluated: ${stats.evaluated}
+
+Trading: ${tradingLabel}
 `.trim();
 }
 
@@ -61,6 +115,9 @@ export function statusText(
   const s =
     getSettings(telegramId);
 
+  const stats =
+    scanner.getStats();
+
   return `
 📊 <b>STATUS</b>
 
@@ -72,7 +129,15 @@ ${s.auto_state === "running"
       : "🔴 STOPPED"}
 
 Scanner:
-⚪ Not active yet
+${
+  stats.running
+    ? "🟢 Active"
+    : "⚪ Not active"
+}
+Discovered: ${stats.discovered}
+Evaluated: ${stats.evaluated}
+Passed: ${stats.passed}
+Reconnects: ${stats.websocketReconnects}
 
 Open positions:
 0
