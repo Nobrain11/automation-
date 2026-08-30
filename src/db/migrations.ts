@@ -1,79 +1,46 @@
-import { db } from "./sqlite.js";
+db.exec(`
+  CREATE TABLE IF NOT EXISTS discovered_tokens (
+    mint TEXT PRIMARY KEY,
 
-export function runMigrations(): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      telegram_id INTEGER PRIMARY KEY,
-      username TEXT,
-      first_name TEXT,
-      last_name TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
+    name TEXT,
+    symbol TEXT,
+    uri TEXT,
 
-    CREATE TABLE IF NOT EXISTS wallets (
-      telegram_id INTEGER PRIMARY KEY,
-      public_key TEXT NOT NULL UNIQUE,
-      encrypted_secret TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
+    creator TEXT,
 
-      FOREIGN KEY (telegram_id)
-        REFERENCES users(telegram_id)
-        ON DELETE CASCADE
-    );
+    discovered_at INTEGER NOT NULL,
+    age_seconds INTEGER NOT NULL,
 
-    CREATE TABLE IF NOT EXISTS sessions (
-      telegram_id INTEGER PRIMARY KEY,
-      awaiting_input TEXT,
-      updated_at INTEGER NOT NULL,
+    bonding_curve TEXT,
+    is_bonding_curve INTEGER NOT NULL DEFAULT 0,
 
-      FOREIGN KEY (telegram_id)
-        REFERENCES users(telegram_id)
-        ON DELETE CASCADE
-    );
+    mint_authority_revoked INTEGER NOT NULL DEFAULT 0,
+    freeze_authority_revoked INTEGER NOT NULL DEFAULT 0,
 
-    CREATE TABLE IF NOT EXISTS auto_settings (
-      telegram_id INTEGER PRIMARY KEY,
+    top10_percent REAL,
 
-      max_buy REAL NOT NULL DEFAULT 0.1,
+    curve_liquidity_sol REAL,
 
-      slippage REAL NOT NULL DEFAULT 20,
+    volume_1m_usd REAL,
 
-      tp_tiers TEXT NOT NULL DEFAULT
-        '[{"profit":40,"sellPercent":50},{"profit":100,"sellPercent":25},{"profit":200,"sellPercent":15}]',
+    creator_dumping INTEGER NOT NULL DEFAULT 0,
 
-      stop_loss REAL NOT NULL DEFAULT 20,
+    smart_money_override INTEGER NOT NULL DEFAULT 0,
 
-      trailing_after REAL NOT NULL DEFAULT 30,
+    passed INTEGER NOT NULL DEFAULT 0,
 
-      trailing_pullback REAL NOT NULL DEFAULT 15,
+    rejection_reasons TEXT NOT NULL DEFAULT '[]'
+  );
 
-      time_stop_minutes INTEGER NOT NULL DEFAULT 30,
+  CREATE INDEX IF NOT EXISTS
+    idx_discovered_tokens_time
+    ON discovered_tokens(discovered_at);
 
-      daily_loss_cap REAL NOT NULL DEFAULT 0.5,
+  CREATE INDEX IF NOT EXISTS
+    idx_discovered_tokens_passed
+    ON discovered_tokens(passed);
 
-      max_trades_hour INTEGER NOT NULL DEFAULT 3,
-
-      max_trades_day INTEGER NOT NULL DEFAULT 10,
-
-      smart_money_boost INTEGER NOT NULL DEFAULT 1,
-
-      auto_state TEXT NOT NULL DEFAULT 'stopped',
-
-      kill_switch INTEGER NOT NULL DEFAULT 0,
-
-      updated_at INTEGER NOT NULL,
-
-      FOREIGN KEY (telegram_id)
-        REFERENCES users(telegram_id)
-        ON DELETE CASCADE
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_wallets_public_key
-      ON wallets(public_key);
-
-    CREATE INDEX IF NOT EXISTS idx_settings_state
-      ON auto_settings(auto_state);
-  `);
-}
+  CREATE INDEX IF NOT EXISTS
+    idx_discovered_tokens_creator
+    ON discovered_tokens(creator);
+`);
