@@ -1171,3 +1171,62 @@ This disables automated operation until manually re-enabled.
         );
 
         return render(
+          ctx,
+          `
+🛑 <b>EMERGENCY KILL ACTIVE</b>
+
+Automated operation is locked.
+          `.trim(),
+          backKeyboard()
+        );
+      }
+
+      /*
+       * STATUS
+       */
+
+      if (
+        data ===
+        "status"
+      ) {
+        return render(
+          ctx,
+          statusText(id),
+          new InlineKeyboard()
+            .text(
+              "📊 Refresh",
+              "status"
+            )
+            .row()
+            .text(
+              "↩️ Back",
+              "home"
+            )
+        );
+      }
+
+    } catch (error) {
+      logger.error(
+        "Callback error",
+        error instanceof Error
+          ? error.message
+          : error
+      );
+
+      await render(
+        ctx,
+        "❌ Something went wrong.",
+        backKeyboard()
+      );
+    }
+  }
+);
+
+bot.catch(
+  (error) => {
+    logger.error(
+      "Bot error",
+      error.error
+    );
+  }
+);
