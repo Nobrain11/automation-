@@ -27,7 +27,12 @@ export function mainKeyboard() {
     .text("🆘 Emergency Kill", "auto:kill")
     .row()
     .text("📚 Learn", "help")
-    .text("🛟 Support", "support");
+    .text("🛟 Support", "support")
+    .row()
+    .text("🔥 Trending", "market:stream")
+    .text("◎ SOL", "market:sol")
+    .row()
+    .text("🎁 Referral", "referral");
 }
 
 export function backKeyboard() {
@@ -178,4 +183,27 @@ export function stopConfirmKeyboard() {
     .text("⏹ Confirm Stop", "auto:stop:confirm")
     .row()
     .text("❌ Cancel", "home");
+}
+
+export function streamKeyboard() {
+  return new InlineKeyboard()
+    .text("🔄 Refresh", "market:stream")
+    .row()
+    .url("Open pump.fun", "https://pump.fun")
+    .row()
+    .text("↩️ Back", "home");
+}
+
+export function solPriceKeyboard() {
+  return new InlineKeyboard()
+    .text("🔄 Refresh", "market:sol")
+    .row()
+    .text("↩️ Back", "home");
+}
+
+export function referralKeyboard() {
+  return new InlineKeyboard()
+    .text("📋 Copy Link", "referral:copy")
+    .row()
+    .text("↩️ Back", "home");
 }
