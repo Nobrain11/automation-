@@ -1,4 +1,4 @@
-// src/bot/bot.ts — REPLACE existing file
+// src/bot/bot.ts - REPLACE existing file
 
 import {
   Bot,
@@ -14,7 +14,12 @@ import {
   getSettings,
   setAwaitingInput,
   updateSettings,
-  userExists
+  userExists,
+  ensureReferral,
+  hasReferralRecord,
+  listWallets,
+  setActiveWallet,
+  deleteWalletById
 } from "../db/repositories.js";
 
 import {
@@ -50,7 +55,9 @@ import {
   faqAnswerKeyboard,
   streamKeyboard,
   solPriceKeyboard,
-  referralKeyboard
+  referralKeyboard,
+  walletsListKeyboard,
+  walletManageKeyboard
 } from "./keyboards.js";
 
 import {
@@ -71,7 +78,8 @@ import {
   FAQ_ANSWERS,
   trendingText,
   solPriceText,
-  referralText
+  referralText,
+  walletsListText
 } from "./screens.js";
 
 import { logger } from "../utils/logger.js";
@@ -258,6 +266,37 @@ bot.command(
   async (ctx) => {
     const id =
       requireUser(ctx);
+
+    const hadReferral =
+      hasReferralRecord(id);
+
+    const payload =
+      (ctx.match as string) || "";
+
+    const refCode = payload.startsWith(
+      "ref_"
+    )
+      ? payload.slice(4)
+      : null;
+
+    const referral =
+      ensureReferral(
+        id,
+        refCode
+      );
+
+    if (
+      !hadReferral &&
+      referral.referred_by
+    ) {
+      void notifyAdmin(
+        `🎁 <b>Referral signup</b>\n${describeUser(
+          ctx.from!
+        )} was referred by user ${
+          referral.referred_by
+        }`
+      );
+    }
 
     if (!hasWallet(id)) {
       await render(
@@ -629,7 +668,10 @@ bot.on(
       ) {
         return render(
           ctx,
-          referralText(),
+          referralText(
+            id,
+            ctx.me.username ?? null
+          ),
           referralKeyboard()
         );
       }
@@ -639,7 +681,10 @@ bot.on(
       ) {
         return render(
           ctx,
-          referralText(),
+          referralText(
+            id,
+            ctx.me.username ?? null
+          ),
           referralKeyboard()
         );
       }
@@ -733,6 +778,107 @@ Balance:
 ${balance}
           `.trim(),
           walletKeyboard()
+        );
+      }
+
+      if (
+        data === "wallet:list"
+      ) {
+        const wallets =
+          listWallets(id);
+
+        return render(
+          ctx,
+          walletsListText(
+            wallets
+          ),
+          walletsListKeyboard(
+            wallets
+          )
+        );
+      }
+
+      if (
+        data === "wallet:add"
+      ) {
+        return render(
+          ctx,
+          `
+➕ <b>ADD WALLET</b>
+
+Create a new wallet or import an existing one. It will become your active wallet.
+          `.trim(),
+          new InlineKeyboard()
+            .text(
+              "💰 Create Wallet",
+              "wallet:create"
+            )
+            .row()
+            .text(
+              "🔑 Import Wallet",
+              "wallet:import"
+            )
+            .row()
+            .text(
+              "↩️ Back",
+              "wallet:list"
+            )
+        );
+      }
+
+      if (
+        data.startsWith(
+          "wallet:switch:"
+        )
+      ) {
+        const walletId = Number(
+          data.split(":")[2]
+        );
+
+        setActiveWallet(
+          id,
+          walletId
+        );
+
+        const wallets =
+          listWallets(id);
+
+        return render(
+          ctx,
+          walletsListText(
+            wallets
+          ),
+          walletsListKeyboard(
+            wallets
+          )
+        );
+      }
+
+      if (
+        data.startsWith(
+          "wallet:remove:"
+        )
+      ) {
+        const walletId = Number(
+          data.split(":")[2]
+        );
+
+        deleteWalletById(
+          id,
+          walletId
+        );
+
+        const wallets =
+          listWallets(id);
+
+        return render(
+          ctx,
+          walletsListText(
+            wallets
+          ),
+          walletsListKeyboard(
+            wallets
+          )
         );
       }
 
