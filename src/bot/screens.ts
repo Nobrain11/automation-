@@ -1,4 +1,4 @@
-// src/bot/screens.ts - extended with education layer (no mock data)
+// src/bot/screens.ts — REPLACE existing file
 
 import { getSettings } from "../db/repositories.js";
 import { getAddress, getBalance } from "../services/wallet.js";
@@ -406,6 +406,14 @@ Failed transactions are not treated as success. Check wallet balance, slippage, 
 `.trim(),
 };
 
+export function faqListText() {
+  return `
+❓ <b>FAQ</b>
+
+Tap a question below to see the answer.
+`.trim();
+}
+
 export function startExplainText(telegramId: number) {
   const s = getSettings(telegramId);
   const stats = scanner.getStats();
@@ -467,5 +475,74 @@ Current automation: <b>${s.auto_state.toUpperCase()}</b>
 Kill switch: <b>${s.kill_switch ? "ACTIVE" : "OFF"}</b>
 
 Use this only when you need an instant hard stop.
+`.trim();
+}
+
+/*
+ * Trending is not yet wired to a live token feed. We show
+ * this honestly rather than fabricating token data — no
+ * fake tokens, prices, or volume.
+ */
+export function trendingText() {
+  return `
+🔥 <b>TRENDING</b>
+
+Live trending feed isn't connected to a data source yet.
+
+Once wired, this will show newly discovered tokens from the scanner. In the meantime, check <b>Status</b> for scanner activity.
+`.trim();
+}
+
+/*
+ * Real SOL/USD price pulled from a public price API.
+ * Returns a real value or an honest "unavailable" state —
+ * never a fabricated price.
+ */
+export async function solPriceText(): Promise<string> {
+  try {
+    const res = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
+    );
+
+    if (!res.ok) {
+      throw new Error(`Price API returned ${res.status}`);
+    }
+
+    const data = (await res.json()) as {
+      solana?: { usd?: number };
+    };
+
+    const price = data.solana?.usd;
+
+    if (typeof price !== "number") {
+      throw new Error("Unexpected price response shape.");
+    }
+
+    return `
+◎ <b>SOL PRICE</b>
+
+$${price.toFixed(2)} USD
+
+Source: CoinGecko
+`.trim();
+  } catch {
+    return `
+◎ <b>SOL PRICE</b>
+
+Price is currently unavailable. Try again in a moment.
+`.trim();
+  }
+}
+
+/*
+ * No referral system is implemented yet (no referral
+ * codes, tracking, or rewards table exists). Honest
+ * placeholder — never a fabricated referral link.
+ */
+export function referralText() {
+  return `
+🎁 <b>REFERRAL</b>
+
+The referral program isn't live yet — no referral codes or rewards are tracked at this time.
 `.trim();
 }
