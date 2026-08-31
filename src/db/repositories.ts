@@ -109,6 +109,25 @@ export function ensureUser(
   `).run(id, now);
 }
 
+/*
+ * getWallet/saveWallet/deleteWallet keep their original
+ * signatures so existing callers (services/wallet.ts)
+ * keep working unchanged. They now operate on the user's
+ * ACTIVE wallet under the hood, since a user can have
+ * multiple wallets. New multi-wallet management functions
+ * (listWallets, setActiveWallet, deleteWalletById) are
+ * below for the "My Wallets" UI.
+ */
+
+export interface WalletRow {
+  id: number;
+  telegram_id: number;
+  label: string;
+  public_key: string;
+  encrypted_secret: string;
+  is_active: number;
+}
+
 export function getWallet(
   telegramId: number
 ): WalletRecord | undefined {
@@ -119,6 +138,9 @@ export function getWallet(
       encrypted_secret
     FROM wallets
     WHERE telegram_id = ?
+      AND is_active = 1
+    ORDER BY id DESC
+    LIMIT 1
   `).get(telegramId) as WalletRecord | undefined;
 }
 
@@ -129,23 +151,34 @@ export function saveWallet(
 ): void {
   const now = Date.now();
 
+  const existingCount = (
+    db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM wallets
+      WHERE telegram_id = ?
+    `).get(telegramId) as { count: number }
+  ).count;
+
+  db.prepare(`
+    UPDATE wallets
+    SET is_active = 0
+    WHERE telegram_id = ?
+  `).run(telegramId);
+
   db.prepare(`
     INSERT INTO wallets (
       telegram_id,
+      label,
       public_key,
       encrypted_secret,
+      is_active,
       created_at,
       updated_at
     )
-    VALUES (?, ?, ?, ?, ?)
-
-    ON CONFLICT(telegram_id)
-    DO UPDATE SET
-      public_key = excluded.public_key,
-      encrypted_secret = excluded.encrypted_secret,
-      updated_at = excluded.updated_at
+    VALUES (?, ?, ?, ?, 1, ?, ?)
   `).run(
     telegramId,
+    `Wallet ${existingCount + 1}`,
     publicKey,
     encryptedSecret,
     now,
@@ -160,6 +193,230 @@ export function deleteWallet(
     DELETE FROM wallets
     WHERE telegram_id = ?
   `).run(telegramId);
+}
+
+export function listWallets(
+  telegramId: number
+): WalletRow[] {
+  return db.prepare(`
+    SELECT
+      id,
+      telegram_id,
+      label,
+      public_key,
+      encrypted_secret,
+      is_active
+    FROM wallets
+    WHERE telegram_id = ?
+    ORDER BY id ASC
+  `).all(telegramId) as WalletRow[];
+}
+
+export function setActiveWallet(
+  telegramId: number,
+  walletId: number
+): void {
+  db.prepare(`
+    UPDATE wallets
+    SET is_active = 0
+    WHERE telegram_id = ?
+  `).run(telegramId);
+
+  db.prepare(`
+    UPDATE wallets
+    SET is_active = 1
+    WHERE id = ? AND telegram_id = ?
+  `).run(walletId, telegramId);
+}
+
+export function deleteWalletById(
+  telegramId: number,
+  walletId: number
+): void {
+  const wallet = db.prepare(`
+    SELECT is_active
+    FROM wallets
+    WHERE id = ? AND telegram_id = ?
+  `).get(walletId, telegramId) as
+    | { is_active: number }
+    | undefined;
+
+  if (!wallet) {
+    return;
+  }
+
+  db.prepare(`
+    DELETE FROM wallets
+    WHERE id = ? AND telegram_id = ?
+  `).run(walletId, telegramId);
+
+  if (wallet.is_active) {
+    const next = db.prepare(`
+      SELECT id
+      FROM wallets
+      WHERE telegram_id = ?
+      ORDER BY id ASC
+      LIMIT 1
+    `).get(telegramId) as
+      | { id: number }
+      | undefined;
+
+    if (next) {
+      setActiveWallet(telegramId, next.id);
+    }
+  }
+}
+
+/*
+ * REFERRALS
+ */
+
+export interface ReferralInfo {
+  telegram_id: number;
+  referral_code: string;
+  referred_by: number | null;
+  commission_rate: number;
+}
+
+function generateReferralCode(): string {
+  const chars =
+    "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+  let code = "";
+
+  for (let i = 0; i < 8; i++) {
+    code +=
+      chars[
+        Math.floor(
+          Math.random() * chars.length
+        )
+      ];
+  }
+
+  return code;
+}
+
+export function hasReferralRecord(
+  telegramId: number
+): boolean {
+  const row = db.prepare(`
+    SELECT 1 FROM referrals WHERE telegram_id = ?
+  `).get(telegramId);
+
+  return row !== undefined;
+}
+
+export function ensureReferral(
+  telegramId: number,
+  referredByCode: string | null
+): ReferralInfo {
+  const existing = db.prepare(`
+    SELECT *
+    FROM referrals
+    WHERE telegram_id = ?
+  `).get(telegramId) as ReferralInfo | undefined;
+
+  if (existing) {
+    return existing;
+  }
+
+  let referredBy: number | null = null;
+
+  if (referredByCode) {
+    const referrer = db.prepare(`
+      SELECT telegram_id
+      FROM referrals
+      WHERE referral_code = ?
+    `).get(referredByCode) as
+      | { telegram_id: number }
+      | undefined;
+
+    if (
+      referrer &&
+      referrer.telegram_id !== telegramId
+    ) {
+      referredBy = referrer.telegram_id;
+    }
+  }
+
+  let code = generateReferralCode();
+
+  /*
+   * Extremely unlikely collision given the code space,
+   * but regenerate rather than risk a UNIQUE violation.
+   */
+  while (
+    db.prepare(`
+      SELECT 1 FROM referrals WHERE referral_code = ?
+    `).get(code)
+  ) {
+    code = generateReferralCode();
+  }
+
+  db.prepare(`
+    INSERT INTO referrals (
+      telegram_id,
+      referral_code,
+      referred_by,
+      commission_rate,
+      created_at
+    )
+    VALUES (?, ?, ?, 10, ?)
+  `).run(
+    telegramId,
+    code,
+    referredBy,
+    Date.now()
+  );
+
+  return {
+    telegram_id: telegramId,
+    referral_code: code,
+    referred_by: referredBy,
+    commission_rate: 10
+  };
+}
+
+export function getReferralStats(
+  telegramId: number
+): {
+  code: string;
+  commissionRate: number;
+  referredCount: number;
+  totalEarnedSol: number;
+} | null {
+  const info = db.prepare(`
+    SELECT *
+    FROM referrals
+    WHERE telegram_id = ?
+  `).get(telegramId) as ReferralInfo | undefined;
+
+  if (!info) {
+    return null;
+  }
+
+  const referredCount = (
+    db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM referrals
+      WHERE referred_by = ?
+    `).get(telegramId) as { count: number }
+  ).count;
+
+  const totalEarnedSol = (
+    db.prepare(`
+      SELECT COALESCE(SUM(commission_sol), 0) AS total
+      FROM referral_earnings
+      WHERE referrer_telegram_id = ?
+    `).get(telegramId) as { total: number }
+  ).total;
+
+  return {
+    code: info.referral_code,
+    commissionRate: info.commission_rate,
+    referredCount,
+    totalEarnedSol
+  };
 }
 
 export function getSettings(
