@@ -1,4 +1,4 @@
-// src/bot/keyboards.ts
+// src/bot/keyboards.ts — REPLACE existing file
 
 import { InlineKeyboard } from "grammy";
 
@@ -95,13 +95,42 @@ export function emergencyKeyboard() {
 
 export function walletKeyboard() {
   return new InlineKeyboard()
+    .text("🗂 My Wallets", "wallet:list")
+    .row()
     .text("📤 Export Private Key", "wallet:export")
     .row()
     .text("📥 Copy Address", "wallet:copy")
     .row()
+    .text("➕ Add Wallet", "wallet:add")
+    .row()
     .text("🚪 Logout", "wallet:logout")
     .row()
     .text("↩️ Back", "home");
+}
+
+export function walletsListKeyboard(
+  wallets: { id: number; label: string; is_active: number }[]
+) {
+  const kb = new InlineKeyboard();
+
+  for (const w of wallets) {
+    const marker = w.is_active ? "✅ " : "";
+    kb.text(`${marker}${w.label}`, `wallet:switch:${w.id}`).row();
+  }
+
+  kb.text("➕ Add Wallet", "wallet:add").row();
+  kb.text("↩️ Back", "wallet:menu");
+
+  return kb;
+}
+
+export function walletManageKeyboard(walletId: number) {
+  return new InlineKeyboard()
+    .text("✅ Make Active", `wallet:switch:${walletId}`)
+    .row()
+    .text("🗑 Remove", `wallet:remove:${walletId}`)
+    .row()
+    .text("↩️ Back", "wallet:list");
 }
 
 export function eduHomeKeyboard() {
