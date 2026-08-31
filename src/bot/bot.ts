@@ -1,4 +1,4 @@
-// src/bot/bot.ts - REPLACE existing file
+// src/bot/bot.ts — REPLACE existing file
 
 import {
   Bot,
@@ -40,7 +40,17 @@ import {
   editSettingKeyboard,
   startConfirmKeyboard,
   emergencyKeyboard,
-  walletKeyboard
+  walletKeyboard,
+  eduHomeKeyboard,
+  eduHowKeyboard,
+  eduRisksKeyboard,
+  eduStrategyKeyboard,
+  eduSecurityKeyboard,
+  eduFaqListKeyboard,
+  faqAnswerKeyboard,
+  streamKeyboard,
+  solPriceKeyboard,
+  referralKeyboard
 } from "./keyboards.js";
 
 import {
@@ -51,7 +61,17 @@ import {
   settingsText,
   pnlText,
   positionsText,
-  supportText
+  supportText,
+  helpHomeText,
+  howItWorksText,
+  risksText,
+  strategyText,
+  securityText,
+  faqListText,
+  FAQ_ANSWERS,
+  trendingText,
+  solPriceText,
+  referralText
 } from "./screens.js";
 
 import { logger } from "../utils/logger.js";
@@ -500,19 +520,127 @@ bot.on(
         );
       }
 
+      /*
+       * HELP / LEARN GUIDE
+       */
+
       if (
         data === "help"
       ) {
         return render(
           ctx,
-          `
-📄 <b>HELP</b>
+          helpHomeText(),
+          eduHomeKeyboard()
+        );
+      }
 
-This bot manages an encrypted Solana wallet and prepares automated trading settings.
+      if (
+        data === "edu:how"
+      ) {
+        return render(
+          ctx,
+          howItWorksText(id),
+          eduHowKeyboard()
+        );
+      }
 
-Token scanning and trade execution are not enabled yet.
-          `.trim(),
-          backKeyboard()
+      if (
+        data === "edu:risks"
+      ) {
+        return render(
+          ctx,
+          risksText(id),
+          eduRisksKeyboard()
+        );
+      }
+
+      if (
+        data === "edu:strategy"
+      ) {
+        return render(
+          ctx,
+          strategyText(id),
+          eduStrategyKeyboard()
+        );
+      }
+
+      if (
+        data === "edu:security"
+      ) {
+        return render(
+          ctx,
+          securityText(),
+          eduSecurityKeyboard()
+        );
+      }
+
+      if (
+        data === "edu:faq"
+      ) {
+        return render(
+          ctx,
+          faqListText(),
+          eduFaqListKeyboard()
+        );
+      }
+
+      if (
+        data.startsWith(
+          "faq:"
+        )
+      ) {
+        const answer =
+          FAQ_ANSWERS[data];
+
+        return render(
+          ctx,
+          answer ??
+            "Question not found.",
+          faqAnswerKeyboard()
+        );
+      }
+
+      /*
+       * MARKET / TRENDING / SOL / REFERRAL
+       */
+
+      if (
+        data === "market:stream"
+      ) {
+        return render(
+          ctx,
+          trendingText(),
+          streamKeyboard()
+        );
+      }
+
+      if (
+        data === "market:sol"
+      ) {
+        return render(
+          ctx,
+          await solPriceText(),
+          solPriceKeyboard()
+        );
+      }
+
+      if (
+        data === "referral"
+      ) {
+        return render(
+          ctx,
+          referralText(),
+          referralKeyboard()
+        );
+      }
+
+      if (
+        data === "referral:copy"
+      ) {
+        return render(
+          ctx,
+          referralText(),
+          referralKeyboard()
         );
       }
 
