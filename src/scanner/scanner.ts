@@ -80,6 +80,21 @@ export class PumpScanner {
   private readonly onToken?:
     TokenHandler;
 
+  /** Max parallel RPC enrich jobs (public RPCs need 1). */
+  private enrichInFlight = 0;
+
+  private readonly maxEnrichInFlight = 1;
+
+  /** Pending signatures waiting for enrich. */
+  private readonly enrichQueue: string[] = [];
+
+  private enrichTimer: NodeJS.Timeout | null = null;
+
+  /** Min gap between RPC enrich starts (ms). */
+  private readonly enrichGapMs = 1500;
+
+  private lastEnrichAt = 0;
+
   constructor(
     options: ScannerOptions = {}
   ) {
@@ -145,6 +160,13 @@ export class PumpScanner {
       this.reconnectTimer =
         null;
     }
+
+    if (this.enrichTimer) {
+      clearTimeout(this.enrichTimer);
+      this.enrichTimer = null;
+    }
+
+    this.enrichQueue.length = 0;
 
     logger.info(
       "Pump.fun scanner stopped."
@@ -227,9 +249,86 @@ export class PumpScanner {
       `Pump.fun candidate ${info.signature}`
     );
 
+    /*
+     * Public RPCs (and many free tiers) hard-rate-limit.
+     * Queue enrich work so we never stampede getParsedTransaction.
+     */
+    this.enqueueEnrich(
+      candidate.signature
+    );
+  }
+
+  private enqueueEnrich(
+    signature: string
+  ): void {
+    if (this.enrichQueue.length >= 40) {
+      this.enrichQueue.shift();
+    }
+
+    this.enrichQueue.push(signature);
+    this.scheduleEnrichPump();
+  }
+
+  private scheduleEnrichPump(): void {
+    if (this.enrichTimer) {
+      return;
+    }
+
+    const wait = Math.max(
+      0,
+      this.enrichGapMs -
+        (Date.now() - this.lastEnrichAt)
+    );
+
+    this.enrichTimer = setTimeout(
+      () => {
+        this.enrichTimer = null;
+        void this.pumpEnrichQueue();
+      },
+      wait
+    );
+  }
+
+  private async pumpEnrichQueue(): Promise<void> {
+    while (
+      this.enrichInFlight < this.maxEnrichInFlight &&
+      this.enrichQueue.length > 0
+    ) {
+      const signature =
+        this.enrichQueue.shift();
+
+      if (!signature) {
+        break;
+      }
+
+      this.enrichInFlight++;
+      this.lastEnrichAt = Date.now();
+
+      try {
+        await this.processSignature(
+          signature
+        );
+      } catch (error) {
+        logger.warn(
+          `Enrich failed for ${signature}`,
+          error
+        );
+      } finally {
+        this.enrichInFlight--;
+      }
+    }
+
+    if (this.enrichQueue.length > 0) {
+      this.scheduleEnrichPump();
+    }
+  }
+
+  private async processSignature(
+    signature: string
+  ): Promise<void> {
     const token =
       await this.enrichCandidate(
-        candidate.signature
+        signature
       );
 
     if (!token) {
@@ -238,11 +337,6 @@ export class PumpScanner {
 
     this.stats.evaluated++;
 
-    /*
-     * Decision transparency:
-     * run filters, record real reasons, update stats.
-     * telegramId 0 = structural defaults (filters are mostly hard-coded).
-     */
     const result = evaluateToken(token, 0);
 
     token.passed = result.passed;
@@ -283,10 +377,24 @@ export class PumpScanner {
           }
         );
     } catch (error) {
-      logger.warn(
-        `Failed to fetch ${signature}`,
-        error
-      );
+      const msg =
+        error instanceof Error
+          ? error.message
+          : String(error);
+
+      if (msg.includes("429")) {
+        logger.warn(
+          `RPC 429 on ${signature.slice(0, 12)}… — slowing down`
+        );
+        // Push back onto queue with delay
+        this.enrichQueue.unshift(signature);
+        this.lastEnrichAt = Date.now() + 5000;
+      } else {
+        logger.warn(
+          `Failed to fetch ${signature}`,
+          error
+        );
+      }
 
       return null;
     }
@@ -294,13 +402,6 @@ export class PumpScanner {
     if (!transaction) {
       return null;
     }
-
-    /*
-     * Find and decode the real Pump.fun "create"
-     * instruction. This is the authoritative source
-     * for name/symbol/uri/mint/bondingCurve — we do
-     * not guess these from token balances or logs.
-     */
 
     const rawInstructions: RawInstructionLike[] =
       transaction.transaction.message.instructions
@@ -354,7 +455,7 @@ export class PumpScanner {
 
     const ageSeconds =
       Math.max(
-      0,
+        0,
         Math.floor(
           Date.now() / 1000 -
             blockTime
@@ -420,18 +521,24 @@ export class PumpScanner {
         }
       } catch (error) {
         logger.warn(
-          `Failed to fetch bonding curve account for ${signature}`,
+          `Failed to fetch bonding curve for ${signature}`,
           error
         );
       }
     }
 
-    const top10Percent =
-      await computeTop10Percent(
-        this.connection,
-        mint,
-        decoded.associatedBondingCurve
-      );
+    // Skip holder analysis under rate pressure — saves several RPC calls
+    let top10Percent: number | null = null;
+    try {
+      top10Percent =
+        await computeTop10Percent(
+          this.connection,
+          mint,
+          decoded.associatedBondingCurve
+        );
+    } catch {
+      top10Percent = null;
+    }
 
     const token: TokenCandidate = {
       mint,
