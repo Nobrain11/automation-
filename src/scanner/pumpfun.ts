@@ -5,10 +5,17 @@ import {
 
 import { config } from "../config.js";
 
+/*
+ * Official Pump.fun bonding-curve program (mainnet + devnet):
+ * 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P
+ *
+ * Previous default was wrong, so logsSubscribe never saw creates
+ * and Decisions stayed empty.
+ */
 export const PUMP_PROGRAM_ID =
   new PublicKey(
     process.env.PUMP_PROGRAM_ID ??
-      "6EF8rrecthR5Dkzon8Nwu78hRvfK1QfB8JvF4w3bV7F"
+      "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
   );
 
 export interface PumpTransactionCandidate {
