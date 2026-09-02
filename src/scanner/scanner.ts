@@ -238,7 +238,34 @@ export class PumpScanner {
 
     this.stats.evaluated++;
 
+    /*
+     * Decision transparency:
+     * run filters, record real reasons, update stats.
+     * telegramId 0 = structural defaults (filters are mostly hard-coded).
+     */
+    const result = evaluateToken(token, 0);
+
+    token.passed = result.passed;
+    token.rejectionReasons = result.reasons;
+
+    if (result.passed) {
+      this.stats.passed++;
+    } else {
+      this.stats.rejected++;
+    }
+
     saveTokenCandidate(token);
+
+    if (this.onToken) {
+      try {
+        await this.onToken(0, token);
+      } catch (error) {
+        logger.warn(
+          "onToken handler failed",
+          error
+        );
+      }
+    }
   }
 
   private async enrichCandidate(
@@ -327,7 +354,7 @@ export class PumpScanner {
 
     const ageSeconds =
       Math.max(
-        0,
+      0,
         Math.floor(
           Date.now() / 1000 -
             blockTime
