@@ -236,3 +236,11 @@ export function referralKeyboard() {
     .row()
     .text("↩️ Back", "home");
 }
+
+export function decisionsKeyboard() {
+  return new InlineKeyboard()
+    .text("🔄 Refresh", "decisions")
+    .row()
+    .text("📊 Status", "status")
+    .text("↩️ Back", "home");
+}
