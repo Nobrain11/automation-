@@ -1,11 +1,25 @@
-// src/scanner/scanner-instance.ts — NEW FILE
+// src/scanner/scanner-instance.ts
 
 import { PumpScanner } from "./scanner.js";
+import { TokenCandidate } from "./types.js";
 
-/*
- * Single shared scanner instance. index.ts starts/stops it;
- * the bot imports this same instance to read live stats
- * (e.g. for the /start home screen) without creating a
- * second, disconnected scanner.
- */
-export const scanner = new PumpScanner();
+export type DecisionHandler = (
+  telegramId: number,
+  token: TokenCandidate
+) => Promise<void>;
+
+let decisionHandler: DecisionHandler | null = null;
+
+export function setDecisionHandler(
+  handler: DecisionHandler
+): void {
+  decisionHandler = handler;
+}
+
+export const scanner = new PumpScanner({
+  onToken: async (telegramId, token) => {
+    if (decisionHandler) {
+      await decisionHandler(telegramId, token);
+    }
+  }
+});
