@@ -2,7 +2,7 @@
 
 import { getSettings, updateSettings, getReferralStats } from "../db/repositories.js";
 import { getRecentTokens, getScannerCounts } from "../db/scanner-repository.js";
-import { listOpenPositions } from "../db/positions.js";
+import { listOpenPositions, listRecentTrades } from "../db/positions.js";
 import { getAddress, getBalance, hasWallet } from "../services/wallet.js";
 import { buyToken, sellPosition } from "../services/trade.js";
 import {
@@ -69,6 +69,16 @@ export async function buildDashboard(telegramId: number) {
     signature: p.entry_signature,
     createdAt: p.created_at
   }));
+  const trades = listRecentTrades(telegramId, 25).map((t) => ({
+    id: t.id,
+    mint: t.mint,
+    side: t.side,
+    amountSol: t.amount_sol,
+    signature: t.signature,
+    status: t.status,
+    error: t.error,
+    createdAt: t.created_at
+  }));
 
   return {
     wallet: {
@@ -121,12 +131,13 @@ export async function buildDashboard(telegramId: number) {
         }
       : null,
     positions,
+    trades,
     pnl: {
       todaySol: null as number | null,
       note:
-        positions.length === 0
-          ? "No completed trades yet"
-          : `${positions.length} open position(s)`
+        trades.length === 0
+          ? "No trades yet"
+          : `${trades.length} recent trade(s) · ${positions.length} open`
     }
   };
 }
@@ -194,7 +205,6 @@ function mergeMarket(scannerRow: any, m: MarketToken | undefined) {
   };
 }
 
-/** Full trending workspace: boosted + scanner enriched */
 export async function buildTrending() {
   const boosted = await fetchBoostedSolana();
   const recent = getRecentTokens(40).map(mapToken);
