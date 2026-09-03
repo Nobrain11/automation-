@@ -7,14 +7,10 @@ import { getAddress, getBalance, hasWallet } from "../services/wallet.js";
 import { buyToken, sellPosition } from "../services/trade.js";
 import {
   enrichMints,
-  fetchBoostedSolana,
   fetchPumpMovers,
-  sortByChange,
   sortByLiquidity,
-  sortByMomentum,
   sortByScore,
   sortBySpike,
-  sortByVolume,
   MarketToken
 } from "../services/market.js";
 import { updateSetting } from "../services/settings.js";
@@ -150,21 +146,49 @@ async function fetchSolPrice(): Promise<{
   change24h: number | null;
 }> {
   try {
+    // prefer pump.fun sol price
+    const res = await fetch("https://frontend-api-v3.pump.fun/sol-price", {
+      headers: {
+        Accept: "application/json",
+        Origin: "https://pump.fun",
+        Referer: "https://pump.fun/"
+      },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (res.ok) {
+      const data: any = await res.json();
+      const price = num(data?.solPrice ?? data?.price ?? data?.usd);
+      if (price != null) return { price, change24h: null };
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
     const res = await fetch(
       "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=true",
       { signal: AbortSignal.timeout(4000) }
     );
     if (!res.ok) return { price: null, change24h: null };
     const data: any = await res.json();
-    const price = data?.solana?.usd;
-    const change24h = data?.solana?.usd_24h_change;
     return {
-      price: typeof price === "number" ? price : null,
-      change24h: typeof change24h === "number" ? change24h : null
+      price: typeof data?.solana?.usd === "number" ? data.solana.usd : null,
+      change24h:
+        typeof data?.solana?.usd_24h_change === "number"
+          ? data.solana.usd_24h_change
+          : null
     };
   } catch {
     return { price: null, change24h: null };
   }
+}
+
+function num(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 export function buildActivity(limit = 40) {
@@ -202,23 +226,20 @@ function mergeMarket(scannerRow: any, m: MarketToken | undefined) {
     volume1h: m?.volume1h ?? null,
     marketCap: m?.marketCap ?? null,
     fdv: m?.fdv ?? null,
-    pairUrl: m?.pairUrl ?? null,
-    dexId: m?.dexId ?? null,
-    isPump: m?.isPump ?? false,
+    pairUrl: m?.pairUrl ?? `https://pump.fun/coin/${scannerRow.mint}`,
+    dexId: m?.dexId ?? "pump.fun",
+    isPump: true,
     website: m?.website ?? null,
     twitter: m?.twitter ?? null,
     telegram: m?.telegram ?? null,
     review: m?.review ?? null,
     spikeScore: m?.spikeScore ?? null,
-    marketOnline: Boolean(m && m.priceUsd != null)
+    marketOnline: Boolean(m)
   };
 }
 
 export async function buildTrending() {
-  const [movers, boosted] = await Promise.all([
-    fetchPumpMovers(),
-    fetchBoostedSolana()
-  ]);
+  const movers = await fetchPumpMovers();
 
   const recent = getRecentTokens(40).map(mapToken);
   const scanMints = recent.map((t) => t.mint).filter(Boolean);
@@ -230,46 +251,21 @@ export async function buildTrending() {
     .filter((t) => t.passed)
     .map((t) => mergeMarket(t, byMint.get(t.mint)));
 
-  const poolMap = new Map<string, MarketToken>();
-  for (const t of [...movers.tokens, ...boosted.tokens]) {
-    const prev = poolMap.get(t.mint);
-    if (!prev || (t.spikeScore || 0) > (prev.spikeScore || 0)) {
-      poolMap.set(t.mint, t);
-    }
-  }
-  const marketPool = [...poolMap.values()];
-
-  const online = movers.online || boosted.online || enrichedScan.length > 0;
+  const list = movers.tokens;
 
   return {
-    online,
-    error: online ? null : movers.error || boosted.error || null,
-    // Default MOVERS = micro-cap spikes only (already filtered in fetchPumpMovers)
-    movers: sortBySpike(movers.tokens).slice(0, 30),
-    trending: sortBySpike(marketPool).slice(0, 30),
-    momentum: sortByMomentum(
-      marketPool.filter((t) => (t.marketCap ?? 0) <= 80_000)
-    ).slice(0, 25),
-    gainers: sortByChange(
-      marketPool.filter((t) => (t.marketCap ?? 0) <= 80_000)
-    ).slice(0, 25),
-    liquidity: sortByLiquidity(
-      marketPool.filter((t) => {
-        const m = t.marketCap ?? 0;
-        return m >= 3_000 && m <= 80_000;
-      })
-    ).slice(0, 25),
-    scored: sortByScore(
-      marketPool.filter((t) => (t.marketCap ?? 0) <= 80_000)
-    ).slice(0, 25),
+    online: movers.online,
+    error: movers.online ? null : movers.error || null,
+    movers: sortBySpike(list).slice(0, 30),
+    trending: sortBySpike(list).slice(0, 30),
+    momentum: sortBySpike(list).slice(0, 25),
+    gainers: sortBySpike(list).slice(0, 25),
+    liquidity: sortByLiquidity(list).slice(0, 25),
+    scored: sortByScore(list).slice(0, 25),
     newPairs,
     passed,
-    source: movers.online
-      ? "micro-cap-spikes"
-      : boosted.online
-        ? "dexscreener-boosted"
-        : "scanner-only",
-    note: "Movers = mcap ~$3k–$80k with sharp 5m/1h pumps (target ~$10k–$15k). Mega-caps excluded."
+    source: movers.online ? "pump.fun" : "scanner-only",
+    note: "pump.fun top-runners + hot trades + new launches · micro-cap focus (~$5k–$25k)"
   };
 }
 
