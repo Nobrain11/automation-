@@ -1,4 +1,4 @@
-// scanner.ts — rate-limited enrich + tx fetch retries
+// scanner.ts — rate-limited enrich + tx fetch retries + drop instrumentation
 
 import {
   Connection,
@@ -37,6 +37,10 @@ import {
 } from "../db/scanner-repository.js";
 
 import {
+  rpcLimiter
+} from "../utils/rpc-limiter.js";
+
+import {
   logger
 } from "../utils/logger.js";
 
@@ -65,7 +69,8 @@ export class PumpScanner {
     rejected: 0,
     lastEventAt: null,
     lastCandidateAt: null,
-    websocketReconnects: 0
+    websocketReconnects: 0,
+    dropReasons: {}
   };
 
   private readonly onToken?: TokenHandler;
@@ -83,7 +88,20 @@ export class PumpScanner {
   }
 
   getStats(): ScannerStats {
-    return { ...this.stats };
+    return {
+      ...this.stats,
+      dropReasons: { ...this.stats.dropReasons }
+    };
+  }
+
+  /*
+   * Records a reason a candidate never reached evaluation.
+   * Always returns null so call sites can `return this.drop(...)`.
+   */
+  private drop(reason: string): null {
+    this.stats.dropReasons[reason] =
+      (this.stats.dropReasons[reason] ?? 0) + 1;
+    return null;
   }
 
   async start(): Promise<void> {
@@ -162,6 +180,7 @@ export class PumpScanner {
   private enqueueEnrich(signature: string): void {
     if (this.enrichQueue.length >= 50) {
       this.enrichQueue.shift();
+      this.drop("queue_overflow");
     }
     this.enrichQueue.push(signature);
     this.scheduleEnrichPump();
@@ -195,6 +214,7 @@ export class PumpScanner {
       try {
         await this.processSignature(signature);
       } catch (error) {
+        this.drop("processing_exception");
         logger.warn(`Enrich failed for ${signature}`, error);
       } finally {
         this.enrichInFlight--;
@@ -242,6 +262,8 @@ export class PumpScanner {
       }
 
       try {
+        await rpcLimiter.acquire();
+
         transaction = await this.connection.getParsedTransaction(
           signature,
           {
@@ -270,7 +292,9 @@ export class PumpScanner {
       if (transaction) break;
     }
 
-    if (!transaction) return null;
+    if (!transaction) {
+      return this.drop("tx_fetch_failed");
+    }
 
     const message: any = transaction.transaction.message;
     const outerIxs: any[] = message.instructions ?? [];
@@ -319,12 +343,14 @@ export class PumpScanner {
       PUMP_PROGRAM_ID
     );
 
-    if (!createIx) return null;
+    if (!createIx) {
+      return this.drop("not_a_create_instruction");
+    }
 
     const decoded = decodeCreateInstruction(createIx);
     if (!decoded || !decoded.mint) {
       logger.warn(`Failed to decode create for ${signature}`);
-      return null;
+      return this.drop("decode_failed");
     }
 
     const mint = decoded.mint;
@@ -352,17 +378,21 @@ export class PumpScanner {
 
     let mintInfo;
     try {
+      await rpcLimiter.acquire();
+
       mintInfo = await this.connection.getParsedAccountInfo(
         new PublicKey(mint),
         "confirmed"
       );
     } catch {
-      return null;
+      return this.drop("mint_info_fetch_failed");
     }
 
     const parsed = (mintInfo.value?.data as any)?.parsed;
     const mintData = parsed?.info;
-    if (!mintData) return null;
+    if (!mintData) {
+      return this.drop("mint_info_unparsed");
+    }
 
     const mintAuthority = mintData.mintAuthority ?? null;
     const freezeAuthority = mintData.freezeAuthority ?? null;
@@ -372,6 +402,8 @@ export class PumpScanner {
 
     if (decoded.bondingCurve) {
       try {
+        await rpcLimiter.acquire();
+
         const curveAccountInfo = await this.connection.getAccountInfo(
           new PublicKey(decoded.bondingCurve),
           "confirmed"
