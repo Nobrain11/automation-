@@ -148,6 +148,36 @@ button:disabled { opacity: 0.5; cursor: wait; }
   letter-spacing: 0.08em;
 }
 
+.sell-btn {
+  margin-top: 6px;
+  width: 100%;
+  background: #2a1418;
+  border-color: #6b1f2a;
+  color: var(--red);
+  padding: 6px;
+  font-size: 10px;
+}
+
+.pos-list { display: flex; flex-direction: column; gap: 8px; }
+.pos-card {
+  background: var(--row);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+}
+.pos-top { font-weight: 700; font-size: 12px; }
+.pos-meta {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  margin-top: 4px;
+  word-break: break-all;
+}
+.empty-pos {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .small { font-size: 11px; line-height: 1.5; color: var(--muted); white-space: pre-wrap; }
 

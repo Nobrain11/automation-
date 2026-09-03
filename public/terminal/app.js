@@ -43,8 +43,12 @@ let lastBuySize = 0.1;
 function tokenCard(t) {
   const liq = fmtNum(t.liquiditySol, 3);
   const top = t.top10 != null ? fmtNum(t.top10, 1) + "%" : "—";
-  const mintOk = t.mintRevoked ? "<span class=\"ok\">mint✓</span>" : "<span class=\"bad\">mint✗</span>";
-  const frzOk = t.freezeRevoked ? "<span class=\"ok\">frz✓</span>" : "<span class=\"bad\">frz✗</span>";
+  const mintOk = t.mintRevoked
+    ? "<span class=\"ok\">mint✓</span>"
+    : "<span class=\"bad\">mint✗</span>";
+  const frzOk = t.freezeRevoked
+    ? "<span class=\"ok\">frz✓</span>"
+    : "<span class=\"bad\">frz✗</span>";
   const reasons =
     t.reasons && t.reasons.length
       ? `<div class="reasons">${t.reasons.slice(0, 2).join(" · ")}</div>`
@@ -82,7 +86,8 @@ function fillCol(el, list, emptyMsg) {
       const mint = card?.dataset.mint;
       const symbol = card?.dataset.symbol;
       if (!mint) return;
-      const size = Number(document.getElementById("inMaxBuy").value) || lastBuySize;
+      const size =
+        Number(document.getElementById("inMaxBuy").value) || lastBuySize;
       if (!confirm(`Buy $${symbol} with ${size} SOL via Jupiter?`)) return;
       btn.disabled = true;
       btn.textContent = "…";
@@ -103,6 +108,53 @@ function fillCol(el, list, emptyMsg) {
         btn.textContent = "BUY";
         alert(String(err.message || err));
       } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function renderPositions(positions) {
+  const box = document.getElementById("posBox");
+  if (!positions.length) {
+    box.innerHTML = `<div class="empty-pos">No open positions</div>`;
+    return;
+  }
+  box.innerHTML = positions
+    .map(
+      (p) => `
+    <div class="pos-card" data-id="${p.id}">
+      <div class="pos-top">$${p.symbol || short(p.mint)}</div>
+      <div class="pos-meta">${p.entrySol} SOL · ${short(p.signature)}</div>
+      <button type="button" class="sell-btn">SELL 100%</button>
+    </div>`
+    )
+    .join("");
+
+  box.querySelectorAll(".sell-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const card = btn.closest(".pos-card");
+      const id = Number(card?.dataset.id);
+      if (!id) return;
+      if (!confirm("Sell 100% of this position via Jupiter?")) return;
+      btn.disabled = true;
+      btn.textContent = "…";
+      try {
+        const r = await api("/api/trade/sell", {
+          method: "POST",
+          body: JSON.stringify({ positionId: id })
+        });
+        if (r.ok) {
+          alert("Sell submitted: " + (r.signature || "ok"));
+          await loadDashboard();
+        } else {
+          alert(r.error || "Sell failed");
+          btn.textContent = "SELL 100%";
+          btn.disabled = false;
+        }
+      } catch (e) {
+        alert(String(e.message || e));
+        btn.textContent = "SELL 100%";
         btn.disabled = false;
       }
     });
@@ -136,7 +188,9 @@ async function loadDashboard() {
         : "● READY";
   document.getElementById("huntMetric").textContent = hs;
   document.getElementById("hunterState").textContent =
-    hs + (d.hunter.killSwitch ? "\nKill switch ON" : "");
+    hs +
+    (d.hunter.killSwitch ? "\nKill switch ON" : "") +
+    "\nAuto-buys on PASS";
 
   document.getElementById("scanPill").classList.toggle("on", d.scanner.running);
   document.getElementById("scanPill").textContent = d.scanner.running
@@ -149,16 +203,7 @@ async function loadDashboard() {
     `Pass  ${d.scanner.passed}\n` +
     `Skip  ${d.scanner.rejected}`;
 
-  if (!d.positions.length) {
-    document.getElementById("posBox").textContent = "No open positions";
-  } else {
-    document.getElementById("posBox").textContent = d.positions
-      .map(
-        (p) =>
-          `$${p.symbol || short(p.mint)}  ${p.entrySol} SOL\n${short(p.signature)}`
-      )
-      .join("\n\n");
-  }
+  renderPositions(d.positions || []);
 
   const setVal = (id, v) => {
     const el = document.getElementById(id);
@@ -182,7 +227,7 @@ async function loadPulse() {
   document.getElementById("cntSkip").textContent = String(p.rejected.length);
 
   document.getElementById("pulseMeta").textContent = p.scannerRunning
-    ? "Scanner LIVE · BUY uses Jupiter routes"
+    ? "Scanner LIVE · BUY / auto-hunter use Jupiter"
     : "Scanner idle · showing last saved tokens";
 
   fillCol(
@@ -231,7 +276,11 @@ document.getElementById("btnStop").onclick = async () => {
   await loadDashboard();
 };
 document.getElementById("btnKill").onclick = async () => {
-  if (!confirm("Emergency stop blocks new auto entries. Does not sell positions."))
+  if (
+    !confirm(
+      "Emergency stop blocks new auto entries. Does not sell positions."
+    )
+  )
     return;
   await api("/api/hunter/kill", { method: "POST" });
   await loadDashboard();
