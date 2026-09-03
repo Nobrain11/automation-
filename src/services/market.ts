@@ -1,10 +1,10 @@
-// Live market: DexScreener pump movers + metadata + professional token review
-// (pump.fun frontend API is Cloudflare-blocked; we use public DexScreener)
+// Live market: micro-cap pump spikes (10k–15k style), not million-dollar coins
+// pump.fun frontend API is Cloudflare-blocked → DexScreener public data
 
 import { logger } from "../utils/logger.js";
 
 export interface TokenReview {
-  score: number; // 0–100
+  score: number;
   grade: "A" | "B" | "C" | "D" | "F";
   labels: string[];
   risks: string[];
@@ -38,11 +38,19 @@ export interface MarketToken {
   isPump: boolean;
   review: TokenReview | null;
   source: "dexscreener" | "scanner" | "pump-movers";
+  spikeScore?: number;
 }
+
+/** Micro-cap band for early pump.fun-style coins */
+const MCAP_MIN = 3_000; // ignore dust / broken quotes
+const MCAP_MAX = 80_000; // not millions — early curve territory
+const SPIKE_5M = 25; // strong short-term move
+const SPIKE_1H = 40;
+const HARD_SPIKE_5M = 50; // +50% in minutes
 
 let cacheMovers: { at: number; tokens: MarketToken[] } | null = null;
 let cacheBoosted: { at: number; tokens: MarketToken[] } | null = null;
-const CACHE_MS = 40_000;
+const CACHE_MS = 25_000; // faster refresh for spikes
 
 function num(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -61,7 +69,6 @@ function gradeFromScore(score: number): TokenReview["grade"] {
   return "F";
 }
 
-/** Deterministic review from real market fields only */
 export function buildTokenReview(t: {
   liquidityUsd: number | null;
   volume24h: number | null;
@@ -76,107 +83,103 @@ export function buildTokenReview(t: {
   isPump: boolean;
   boosts: number | null;
 }): TokenReview {
-  let score = 40;
+  let score = 35;
   const labels: string[] = [];
   const risks: string[] = [];
 
   const liq = t.liquidityUsd ?? 0;
-  const vol = t.volume24h ?? 0;
+  const vol1h = t.volume1h ?? 0;
   const mcap = t.marketCap ?? 0;
+  const chg5 = t.priceChange5m;
+  const chg1 = t.priceChange1h;
   const ageH =
     t.pairCreatedAt != null
       ? (Date.now() - t.pairCreatedAt) / 3_600_000
       : null;
 
-  if (liq >= 50_000) {
-    score += 18;
-    labels.push("Deep liquidity");
-  } else if (liq >= 15_000) {
-    score += 12;
-    labels.push("Solid liquidity");
-  } else if (liq >= 5_000) {
-    score += 6;
-    labels.push("Thin liquidity");
-  } else {
-    score -= 8;
-    risks.push("Very low liquidity");
+  // Micro-cap is the target — reward early size, penalize large caps
+  if (mcap > 0 && mcap <= 15_000) {
+    score += 16;
+    labels.push("Micro-cap ~10k");
+  } else if (mcap <= 40_000) {
+    score += 10;
+    labels.push("Small-cap");
+  } else if (mcap <= 80_000) {
+    score += 4;
+  } else if (mcap > 500_000) {
+    score -= 20;
+    risks.push("Too large for early mover");
   }
 
-  if (vol >= 100_000) {
+  if (chg5 != null && chg5 >= HARD_SPIKE_5M) {
+    score += 22;
+    labels.push(`Spike +${Math.round(chg5)}% 5m`);
+  } else if (chg5 != null && chg5 >= SPIKE_5M) {
     score += 14;
-    labels.push("High volume");
-  } else if (vol >= 25_000) {
-    score += 8;
-    labels.push("Active volume");
-  } else if (vol < 2_000) {
-    score -= 6;
-    risks.push("Low volume");
+    labels.push(`Hot +${Math.round(chg5)}% 5m`);
+  } else if (chg5 != null && chg5 > 10) {
+    score += 6;
+    labels.push("Building heat");
   }
 
-  if (mcap > 0 && liq > 0) {
-    const ratio = liq / mcap;
-    if (ratio >= 0.15) {
+  if (chg1 != null && chg1 >= SPIKE_1H) {
+    score += 10;
+    labels.push(`+${Math.round(chg1)}% 1h`);
+  }
+
+  if (vol1h >= 5_000) {
+    score += 10;
+    labels.push("1h volume");
+  } else if (vol1h >= 1_000) {
+    score += 5;
+  } else if (vol1h < 200 && (chg5 ?? 0) > 20) {
+    risks.push("Spike on tiny volume");
+    score -= 4;
+  }
+
+  if (liq >= 2_000 && liq <= 25_000) {
+    score += 8;
+    labels.push("Early liquidity");
+  } else if (liq < 800) {
+    score -= 10;
+    risks.push("Illiquid");
+  } else if (liq > 100_000) {
+    score -= 6;
+  }
+
+  if (ageH != null) {
+    if (ageH < 1) {
       score += 8;
-      labels.push("Healthy liq/mcap");
-    } else if (ratio < 0.03) {
-      score -= 10;
-      risks.push("Weak liq vs mcap");
+      labels.push("Fresh launch");
+    } else if (ageH < 6) {
+      score += 4;
+      labels.push("Early pair");
+    } else if (ageH > 48) {
+      score -= 6;
     }
+  }
+
+  if (t.isPump) {
+    score += 5;
+    labels.push("Pump route");
   }
 
   const sells = t.txnsSells24h ?? 0;
   const buys = t.txnsBuys24h ?? 0;
-  if (buys + sells > 50) {
+  if (buys + sells > 20) {
     const sellShare = sells / (buys + sells);
-    if (sellShare > 0.65) {
+    if (sellShare > 0.7) {
       score -= 12;
-      risks.push("Sell-heavy flow");
-    } else if (sellShare < 0.4) {
-      score += 6;
-      labels.push("Buy-leaning flow");
+      risks.push("Sell-heavy");
     }
-  }
-
-  const chg5 = t.priceChange5m;
-  const chg1 = t.priceChange1h;
-  if (chg5 != null && Math.abs(chg5) > 40) {
-    score -= 8;
-    risks.push("Extreme 5m volatility");
-    labels.push("High momentum");
-  } else if (chg5 != null && chg5 > 8) {
-    score += 4;
-    labels.push("Short-term strength");
-  }
-  if (chg1 != null && chg1 < -25) {
-    score -= 10;
-    risks.push("Sharp 1h drawdown");
-  }
-
-  if (ageH != null) {
-    if (ageH < 0.5) {
-      score -= 6;
-      risks.push("Brand new pair");
-      labels.push("Fresh launch");
-    } else if (ageH < 6) {
-      labels.push("Early pair");
-    } else if (ageH > 72) {
-      score += 4;
-      labels.push("Seasoned pair");
-    }
-  }
-
-  if (t.isPump) labels.push("Pump route");
-  if ((t.boosts ?? 0) > 0) {
-    score += 3;
-    labels.push("Boosted");
   }
 
   score = Math.max(0, Math.min(100, Math.round(score)));
   const grade = gradeFromScore(score);
-
   let summary = `Score ${score}/100 (${grade}).`;
+  if (mcap > 0) summary += ` Mcap ~$${Math.round(mcap).toLocaleString()}.`;
+  if (chg5 != null && chg5 >= 20) summary += ` 5m ${chg5 >= 0 ? "+" : ""}${chg5.toFixed(0)}%.`;
   if (risks.length) summary += ` Risks: ${risks.slice(0, 2).join("; ")}.`;
-  else if (labels.length) summary += ` ${labels.slice(0, 2).join(" · ")}.`;
 
   return {
     score,
@@ -192,12 +195,13 @@ function isPumpPair(pair: any): boolean {
   if (dex.includes("pump")) return true;
   const base = String(pair?.baseToken?.address || "");
   if (base.toLowerCase().endsWith("pump")) return true;
-  const url = String(pair?.url || "");
-  if (url.includes("pump")) return true;
   return false;
 }
 
-function mapPair(pair: any, source: MarketToken["source"] = "dexscreener"): MarketToken | null {
+function mapPair(
+  pair: any,
+  source: MarketToken["source"] = "dexscreener"
+): MarketToken | null {
   const mint = pair?.baseToken?.address;
   if (!mint || typeof mint !== "string") return null;
   if ((pair?.chainId || "").toLowerCase() !== "solana") return null;
@@ -254,10 +258,63 @@ function mapPair(pair: any, source: MarketToken["source"] = "dexscreener"): Mark
     telegram,
     isPump,
     review: null,
-    source
+    source,
+    spikeScore: spikeRank(base)
   };
   token.review = buildTokenReview(base);
   return token;
+}
+
+/** Higher = more like a sudden micro-cap pump */
+function spikeRank(t: {
+  marketCap: number | null;
+  priceChange5m: number | null;
+  priceChange1h: number | null;
+  volume1h: number | null;
+  liquidityUsd: number | null;
+  pairCreatedAt: number | null;
+}): number {
+  const mcap = t.marketCap ?? 0;
+  const c5 = t.priceChange5m ?? 0;
+  const c1 = t.priceChange1h ?? 0;
+  const v1 = t.volume1h ?? 0;
+  const ageH =
+    t.pairCreatedAt != null
+      ? (Date.now() - t.pairCreatedAt) / 3_600_000
+      : 99;
+
+  let s = 0;
+  // Prefer 5k–25k mcap (classic early pump zone)
+  if (mcap >= 5_000 && mcap <= 15_000) s += 40;
+  else if (mcap <= 30_000) s += 28;
+  else if (mcap <= 60_000) s += 12;
+  else if (mcap > 200_000) s -= 40;
+
+  if (c5 >= 50) s += 50;
+  else if (c5 >= 25) s += 30;
+  else if (c5 >= 10) s += 12;
+  else if (c5 < 0) s -= 15;
+
+  if (c1 >= 40) s += 18;
+  if (v1 >= 2_000) s += 10;
+  if (ageH < 2) s += 15;
+  else if (ageH < 8) s += 8;
+
+  return s;
+}
+
+function isMicroCapSpike(t: MarketToken): boolean {
+  const mcap = t.marketCap;
+  if (mcap == null || mcap < MCAP_MIN || mcap > MCAP_MAX) return false;
+
+  const c5 = t.priceChange5m ?? 0;
+  const c1 = t.priceChange1h ?? 0;
+
+  // Must be moving hard in the short window
+  if (c5 >= SPIKE_5M) return true;
+  if (c5 >= 15 && c1 >= SPIKE_1H) return true;
+  if (c1 >= 60 && mcap <= 40_000) return true;
+  return false;
 }
 
 async function searchPairs(q: string): Promise<any[]> {
@@ -275,7 +332,10 @@ async function searchPairs(q: string): Promise<any[]> {
   }
 }
 
-/** Pump.fun-style movers: pump dex + *pump mints + high activity Solana */
+/**
+ * Early pump movers: micro-cap + sudden % spike.
+ * Excludes million-dollar / large graduated names.
+ */
 export async function fetchPumpMovers(): Promise<{
   online: boolean;
   tokens: MarketToken[];
@@ -286,37 +346,60 @@ export async function fetchPumpMovers(): Promise<{
   }
 
   try {
-    const queries = ["pump", "pumpswap", "sol", "bonk", "meme"];
+    // Broad net, then hard-filter to micro spikes
+    const queries = ["pump", "pumpswap", "sol", "meme", "coin"];
     const allPairs: any[] = [];
     for (const q of queries) {
-      const pairs = await searchPairs(q);
-      allPairs.push(...pairs);
+      allPairs.push(...(await searchPairs(q)));
     }
 
     const solPairs = allPairs.filter(
       (p) => (p.chainId || "").toLowerCase() === "solana"
     );
 
-    // Prefer pump routes, then high volume
-    const pumpFirst = solPairs.filter(isPumpPair);
-    const pool = pumpFirst.length >= 8 ? pumpFirst : solPairs;
-
     const best = new Map<string, any>();
-    for (const p of pool) {
+    for (const p of solPairs) {
       const mint = p.baseToken?.address;
       if (!mint) continue;
+      const mcap = num(p.marketCap) ?? 0;
+      // Drop obvious mega-caps early
+      if (mcap > MCAP_MAX * 3) continue;
+
       const prev = best.get(mint);
-      const vol = num(p.volume?.h24) || 0;
-      const prevVol = prev ? num(prev.volume?.h24) || 0 : -1;
-      if (!prev || vol > prevVol) best.set(mint, p);
+      const score =
+        (num(p.priceChange?.m5) || 0) * 2 + (num(p.volume?.h1) || 0) / 1000;
+      const prevScore = prev
+        ? (num(prev.priceChange?.m5) || 0) * 2 +
+          (num(prev.volume?.h1) || 0) / 1000
+        : -1e9;
+      if (!prev || score > prevScore) best.set(mint, p);
     }
 
-    const tokens = [...best.values()]
+    let tokens = [...best.values()]
       .map((p) => mapPair(p, "pump-movers"))
       .filter(Boolean) as MarketToken[];
 
-    tokens.sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0));
-    const top = tokens.slice(0, 40);
+    // Prefer pump-route when available
+    const pumpTokens = tokens.filter((t) => t.isPump);
+    if (pumpTokens.length >= 5) tokens = pumpTokens;
+
+    // Hard filter: micro-cap spikes only
+    let spikes = tokens.filter(isMicroCapSpike);
+
+    // If DexScreener is quiet, show nearest micro-caps by spike score
+    if (spikes.length < 5) {
+      spikes = tokens
+        .filter((t) => {
+          const m = t.marketCap ?? 0;
+          return m >= MCAP_MIN && m <= MCAP_MAX;
+        })
+        .sort((a, b) => (b.spikeScore || 0) - (a.spikeScore || 0))
+        .slice(0, 25);
+    } else {
+      spikes.sort((a, b) => (b.spikeScore || 0) - (a.spikeScore || 0));
+    }
+
+    const top = spikes.slice(0, 30);
     cacheMovers = { at: Date.now(), tokens: top };
     return { online: top.length > 0, tokens: top };
   } catch (error) {
@@ -354,7 +437,6 @@ export async function fetchBoostedSolana(): Promise<{
       .filter(Boolean)
       .slice(0, 30) as string[];
     const enriched = await enrichMints(mints);
-    // attach boost descriptions if present
     const descBy = new Map(
       solana.map((x) => [x.tokenAddress, x.description || null])
     );
@@ -364,8 +446,13 @@ export async function fetchBoostedSolana(): Promise<{
       if (!t.imageUrl && iconBy.get(t.mint))
         t.imageUrl = String(iconBy.get(t.mint));
     }
-    cacheBoosted = { at: Date.now(), tokens: enriched };
-    return { online: true, tokens: enriched };
+    // Keep boosts only if still micro-ish
+    const filtered = enriched.filter((t) => {
+      const m = t.marketCap;
+      return m == null || (m >= MCAP_MIN && m <= 150_000);
+    });
+    cacheBoosted = { at: Date.now(), tokens: filtered };
+    return { online: true, tokens: filtered };
   } catch (error) {
     return {
       online: false,
@@ -417,14 +504,14 @@ export function sortByVolume(tokens: MarketToken[]): MarketToken[] {
 
 export function sortByChange(tokens: MarketToken[]): MarketToken[] {
   return [...tokens].sort(
-    (a, b) => (b.priceChange24h || 0) - (a.priceChange24h || 0)
+    (a, b) => (b.priceChange5m || 0) - (a.priceChange5m || 0)
   );
 }
 
 export function sortByMomentum(tokens: MarketToken[]): MarketToken[] {
   return [...tokens].sort((a, b) => {
-    const ma = (a.priceChange5m || 0) * 2 + (a.priceChange1h || 0);
-    const mb = (b.priceChange5m || 0) * 2 + (b.priceChange1h || 0);
+    const ma = (a.priceChange5m || 0) * 3 + (a.priceChange1h || 0);
+    const mb = (b.priceChange5m || 0) * 3 + (b.priceChange1h || 0);
     return mb - ma;
   });
 }
@@ -439,4 +526,8 @@ export function sortByScore(tokens: MarketToken[]): MarketToken[] {
   return [...tokens].sort(
     (a, b) => (b.review?.score || 0) - (a.review?.score || 0)
   );
+}
+
+export function sortBySpike(tokens: MarketToken[]): MarketToken[] {
+  return [...tokens].sort((a, b) => (b.spikeScore || 0) - (a.spikeScore || 0));
 }
