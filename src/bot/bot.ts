@@ -170,8 +170,8 @@ function requireUser(ctx: Context): number {
   if (!id) throw new Error("No user");
   if (!userExists(id)) {
     ensureUser(id, {
-      username: ctx.from?.username ?? null,
-      first_name: ctx.from?.first_name ?? null
+      username: ctx.from?.username,
+      first_name: ctx.from?.first_name
     });
   }
   return id;
