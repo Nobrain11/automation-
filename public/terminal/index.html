@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PUMP AUTO — Terminal</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="gate" class="gate hidden">
+    <div class="card">
+      <h1>⚡ PUMP AUTO</h1>
+      <p>Open this terminal from the Telegram bot using <b>Web Terminal</b>. Login links expire in 10 minutes.</p>
+      <p class="muted">No mock data. Same wallet &amp; settings as Telegram.</p>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="top">
+      <div class="brand">⚡ PUMP AUTO <span>TERMINAL</span></div>
+      <div class="top-actions">
+        <button id="btnRefresh" class="ghost">Refresh</button>
+        <button id="btnLogout" class="ghost">Logout</button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="panel">
+        <h2>WALLET</h2>
+        <div id="walletBox" class="mono">—</div>
+      </section>
+
+      <section class="panel">
+        <h2>AUTO-HUNTER</h2>
+        <div id="hunterBox" class="mono">—</div>
+        <div class="row">
+          <button id="btnStart" class="primary">Start Hunting</button>
+          <button id="btnStop" class="warn">Stop</button>
+          <button id="btnKill" class="danger">Emergency Stop</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>SCANNER</h2>
+        <div id="scannerBox" class="mono">—</div>
+      </section>
+
+      <section class="panel">
+        <h2>SETTINGS</h2>
+        <div id="settingsBox" class="mono">—</div>
+      </section>
+
+      <section class="panel wide">
+        <h2>ACTIVITY / DECISIONS</h2>
+        <div id="activityBox" class="mono feed">—</div>
+      </section>
+
+      <section class="panel">
+        <h2>POSITIONS</h2>
+        <div id="posBox" class="mono">No open positions</div>
+      </section>
+
+      <section class="panel">
+        <h2>PNL</h2>
+        <div id="pnlBox" class="mono">No completed trades yet</div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      Real data only · Keys never shown in web UI · Manage keys in Telegram
+    </footer>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
