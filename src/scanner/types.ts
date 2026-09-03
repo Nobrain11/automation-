@@ -45,4 +45,12 @@ export interface ScannerStats {
   lastCandidateAt: number | null;
 
   websocketReconnects: number;
+
+  /*
+   * Counts every reason a discovered candidate never made
+   * it to evaluation (queue overflow, tx fetch failure,
+   * decode failure, etc.) — this is what actually explains
+   * a big gap between Discovered and Evaluated.
+   */
+  dropReasons: Record<string, number>;
 }
