@@ -42,6 +42,44 @@ export function openPosition(input: {
   return Number(result.lastInsertRowid);
 }
 
+export function getPosition(
+  telegramId: number,
+  positionId: number
+): PositionRow | undefined {
+  return db
+    .prepare(
+      `
+    SELECT * FROM positions
+    WHERE id = ? AND telegram_id = ?
+  `
+    )
+    .get(positionId, telegramId) as PositionRow | undefined;
+}
+
+export function closePosition(input: {
+  telegramId: number;
+  positionId: number;
+  exitSol?: number | null;
+  signature?: string | null;
+}): void {
+  db.prepare(
+    `
+    UPDATE positions
+    SET status = 'closed',
+        closed_at = ?,
+        exit_sol = ?,
+        exit_signature = ?
+    WHERE id = ? AND telegram_id = ? AND status = 'open'
+  `
+  ).run(
+    Date.now(),
+    input.exitSol ?? null,
+    input.signature ?? null,
+    input.positionId,
+    input.telegramId
+  );
+}
+
 export function listOpenPositions(telegramId: number): PositionRow[] {
   return db
     .prepare(

@@ -1,10 +1,11 @@
-// src/index.ts — web responds first; scanner/bot are non-blocking for health
+// src/index.ts — web first; scanner + hunter + bot
 
 import { bot } from "./bot/bot.js";
 import { config, validateConfig } from "./config.js";
 import { runMigrations } from "./db/migrations.js";
 import { closeDatabase } from "./db/sqlite.js";
-import { scanner } from "./scanner/scanner-instance.js";
+import { scanner, setDecisionHandler } from "./scanner/scanner-instance.js";
+import { onTokenDecision } from "./services/hunter.js";
 import { logger } from "./utils/logger.js";
 import { startWebServer } from "./web/server.js";
 
@@ -21,7 +22,9 @@ async function main() {
   runMigrations();
   logger.info("Database initialized.");
 
-  // CRITICAL: bind HTTP before scanner/bot so Railway health checks pass
+  // Auto-Hunter executes buys when tokens pass filters
+  setDecisionHandler(onTokenDecision);
+
   startWebServer();
   if (config.webBaseUrl) {
     logger.info(`Web terminal public URL: ${config.webBaseUrl}`);
@@ -31,7 +34,6 @@ async function main() {
     );
   }
 
-  // Scanner: never block process startup if RPC is slow/down
   void scanner
     .start()
     .then(() => logger.info("Pump.fun discovery engine initialized."))
@@ -39,7 +41,6 @@ async function main() {
       logger.error("Scanner failed to start (web + bot still running).", error)
     );
 
-  // Bot: long-polling; keep process alive
   await bot.start({
     onStart: () => {
       logger.info("Telegram bot started.");
