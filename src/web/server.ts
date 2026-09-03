@@ -3,7 +3,6 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
@@ -17,13 +16,15 @@ import {
 import {
   buildActivity,
   buildDashboard,
+  clearKill,
   emergencyStop,
+  patchSettings,
   startHunter,
   stopHunter
 } from "./api.js";
+import { resolvePublicTerminalDir } from "./paths.js";
 
-const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const PUBLIC_DIR = join(__dirname, "../../public/terminal");
+const PUBLIC_DIR = resolvePublicTerminalDir();
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -52,6 +53,14 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
   send(res, status, JSON.stringify(data), "application/json; charset=utf-8");
 }
 
+async function readBody(req: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 function sessionFromReq(req: IncomingMessage): number | null {
   const cookies = parseCookies(req.headers.cookie);
   return resolveSession(cookies["pa_session"]);
@@ -73,13 +82,18 @@ async function serveStatic(res: ServerResponse, urlPath: string) {
       const data = await readFile(join(PUBLIC_DIR, "index.html"));
       send(res, 200, data, "text/html; charset=utf-8");
     } catch {
-      send(res, 404, "Not found");
+      send(
+        res,
+        404,
+        `Terminal UI not found. Looked in: ${PUBLIC_DIR}`
+      );
     }
   }
 }
 
 export function startWebServer(): void {
   const port = config.webPort;
+  logger.info(`Terminal static dir: ${PUBLIC_DIR}`);
 
   const server = createServer(async (req, res) => {
     try {
@@ -137,6 +151,23 @@ export function startWebServer(): void {
         return;
       }
 
+      if (path === "/api/settings" && req.method === "POST") {
+        const telegramId = sessionFromReq(req);
+        if (!telegramId) {
+          sendJson(res, 401, { error: "unauthorized" });
+          return;
+        }
+        let body: Record<string, unknown> = {};
+        try {
+          body = JSON.parse(await readBody(req));
+        } catch {
+          sendJson(res, 400, { ok: false, error: "Invalid JSON" });
+          return;
+        }
+        sendJson(res, 200, patchSettings(telegramId, body));
+        return;
+      }
+
       if (path === "/api/hunter/start" && req.method === "POST") {
         const telegramId = sessionFromReq(req);
         if (!telegramId) {
@@ -167,6 +198,16 @@ export function startWebServer(): void {
         return;
       }
 
+      if (path === "/api/hunter/clear-kill" && req.method === "POST") {
+        const telegramId = sessionFromReq(req);
+        if (!telegramId) {
+          sendJson(res, 401, { error: "unauthorized" });
+          return;
+        }
+        sendJson(res, 200, clearKill(telegramId));
+        return;
+      }
+
       if (path === "/api/logout" && req.method === "POST") {
         const cookies = parseCookies(req.headers.cookie);
         if (cookies["pa_session"]) destroySession(cookies["pa_session"]);
@@ -177,7 +218,7 @@ export function startWebServer(): void {
       }
 
       if (path === "/health") {
-        sendJson(res, 200, { ok: true });
+        sendJson(res, 200, { ok: true, publicDir: PUBLIC_DIR });
         return;
       }
 

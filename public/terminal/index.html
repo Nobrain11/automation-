@@ -11,7 +11,7 @@
     <div class="card">
       <h1>⚡ PUMP AUTO</h1>
       <p>Open this terminal from the Telegram bot using <b>Web Terminal</b>. Login links expire in 10 minutes.</p>
-      <p class="muted">No mock data. Same wallet &amp; settings as Telegram.</p>
+      <p class="muted">No mock data. Same wallet &amp; settings as Telegram. Keys never shown here.</p>
     </div>
   </div>
 
@@ -37,6 +37,7 @@
           <button id="btnStart" class="primary">Start Hunting</button>
           <button id="btnStop" class="warn">Stop</button>
           <button id="btnKill" class="danger">Emergency Stop</button>
+          <button id="btnClearKill" class="ghost hidden">Clear Kill</button>
         </div>
       </section>
 
@@ -48,6 +49,15 @@
       <section class="panel">
         <h2>SETTINGS</h2>
         <div id="settingsBox" class="mono">—</div>
+        <div class="edit-grid">
+          <label>Max buy (SOL)<input id="inMaxBuy" type="number" step="0.01" min="0.01" /></label>
+          <label>Slippage %<input id="inSlip" type="number" step="1" min="1" /></label>
+          <label>Stop loss %<input id="inSl" type="number" step="1" /></label>
+          <label>Daily cap (SOL)<input id="inCap" type="number" step="0.05" min="0" /></label>
+        </div>
+        <div class="row">
+          <button id="btnSaveSettings" class="primary">Save settings</button>
+        </div>
       </section>
 
       <section class="panel wide">

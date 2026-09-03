@@ -39,16 +39,33 @@ async function loadDashboard() {
     d.wallet.balanceSol == null
       ? "unavailable"
       : d.wallet.balanceSol.toFixed(4) + " SOL";
+  const usd =
+    d.wallet.balanceUsd != null ? ` · $${d.wallet.balanceUsd}` : "";
+  const solLine =
+    d.sol && d.sol.price != null
+      ? `SOL $${d.sol.price.toFixed(2)}` +
+        (d.sol.change24h != null
+          ? ` ${d.sol.change24h >= 0 ? "▲" : "▼"} ${Math.abs(d.sol.change24h).toFixed(2)}%`
+          : "")
+      : "SOL price unavailable";
 
   document.getElementById("walletBox").textContent =
     (d.wallet.connected ? "CONNECTED\n" : "NOT CONNECTED\n") +
     shortAddr(d.wallet.address) +
     "\n" +
-    bal;
+    bal +
+    usd +
+    "\n" +
+    solLine;
 
   document.getElementById("hunterBox").textContent =
     hunterLabel(d.hunter.state) +
     (d.hunter.killSwitch ? "\nKill switch: ON" : "");
+
+  const clearBtn = document.getElementById("btnClearKill");
+  if (clearBtn) {
+    clearBtn.classList.toggle("hidden", !d.hunter.killSwitch);
+  }
 
   document.getElementById("scannerBox").textContent =
     (d.scanner.running ? "● LIVE" : "● OFF") +
@@ -65,6 +82,16 @@ async function loadDashboard() {
     `Trail after +${s.trailingAfter}%\n` +
     `Daily cap   ${s.dailyLossCap} SOL\n` +
     `Smart $     ${s.smartMoneyBoost ? "ON" : "OFF"}`;
+
+  // fill quick-edit inputs if present
+  const setVal = (id, v) => {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = v;
+  };
+  setVal("inMaxBuy", s.maxBuy);
+  setVal("inSlip", s.slippage);
+  setVal("inSl", s.stopLoss);
+  setVal("inCap", s.dailyLossCap);
 
   document.getElementById("posBox").textContent =
     d.positions.length === 0
@@ -129,6 +156,32 @@ document.getElementById("btnKill").addEventListener("click", async () => {
   await api("/api/hunter/kill", { method: "POST" });
   await loadDashboard();
 });
+
+const clearKillBtn = document.getElementById("btnClearKill");
+if (clearKillBtn) {
+  clearKillBtn.addEventListener("click", async () => {
+    await api("/api/hunter/clear-kill", { method: "POST" });
+    await loadDashboard();
+  });
+}
+
+const saveBtn = document.getElementById("btnSaveSettings");
+if (saveBtn) {
+  saveBtn.addEventListener("click", async () => {
+    const body = {
+      max_buy: Number(document.getElementById("inMaxBuy").value),
+      slippage: Number(document.getElementById("inSlip").value),
+      stop_loss: Number(document.getElementById("inSl").value),
+      daily_loss_cap: Number(document.getElementById("inCap").value)
+    };
+    const r = await api("/api/settings", {
+      method: "POST",
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) alert(r.error || "Save failed");
+    await loadDashboard();
+  });
+}
 
 boot();
 setInterval(() => {
