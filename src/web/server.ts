@@ -229,7 +229,12 @@ export function startWebServer(): void {
     }
   });
 
-  server.listen(port, () => {
-    logger.info(`Web terminal listening on port ${port}`);
+  // Bind all interfaces — required on Railway/containers
+  server.listen(port, "0.0.0.0", () => {
+    logger.info(`Web terminal listening on 0.0.0.0:${port}`);
+  });
+
+  server.on("error", (err) => {
+    logger.error("HTTP server failed to bind", err);
   });
 }
