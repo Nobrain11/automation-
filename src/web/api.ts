@@ -2,7 +2,9 @@
 
 import { getSettings, updateSettings, getReferralStats } from "../db/repositories.js";
 import { getRecentTokens, getScannerCounts } from "../db/scanner-repository.js";
+import { listOpenPositions } from "../db/positions.js";
 import { getAddress, getBalance, hasWallet } from "../services/wallet.js";
+import { buyToken } from "../services/trade.js";
 import { updateSetting } from "../services/settings.js";
 import { scanner } from "../scanner/scanner-instance.js";
 
@@ -50,6 +52,14 @@ export async function buildDashboard(telegramId: number) {
   const dbCounts = getScannerCounts();
   const ref = getReferralStats(telegramId);
   const sol = await fetchSolPrice();
+  const positions = listOpenPositions(telegramId).map((p) => ({
+    id: p.id,
+    mint: p.mint,
+    symbol: p.symbol,
+    entrySol: p.entry_sol,
+    signature: p.entry_signature,
+    createdAt: p.created_at
+  }));
 
   return {
     wallet: {
@@ -101,10 +111,13 @@ export async function buildDashboard(telegramId: number) {
           totalEarnedSol: ref.totalEarnedSol
         }
       : null,
-    positions: [],
+    positions,
     pnl: {
       todaySol: null as number | null,
-      note: "No completed trades yet"
+      note:
+        positions.length === 0
+          ? "No completed trades yet"
+          : `${positions.length} open position(s)`
     }
   };
 }
@@ -140,7 +153,6 @@ export function buildActivity(limit = 40) {
   };
 }
 
-/** Axiom-style Pulse columns from real DB rows */
 export function buildPulse(limit = 30) {
   const all = getRecentTokens(80).map(mapToken);
   const newPairs = all.slice(0, limit);
@@ -154,6 +166,19 @@ export function buildPulse(limit = 30) {
     passed,
     rejected
   };
+}
+
+export async function executeBuy(
+  telegramId: number,
+  body: { mint?: string; amountSol?: number; symbol?: string }
+) {
+  if (!body.mint) return { ok: false, error: "mint required" };
+  return buyToken({
+    telegramId,
+    mint: body.mint,
+    amountSol: body.amountSol,
+    symbol: body.symbol
+  });
 }
 
 export function startHunter(telegramId: number): { ok: boolean; error?: string } {

@@ -19,6 +19,7 @@ import {
   buildPulse,
   clearKill,
   emergencyStop,
+  executeBuy,
   patchSettings,
   startHunter,
   stopHunter
@@ -155,6 +156,20 @@ export function startWebServer(): void {
         const telegramId = requireAuth(req, res);
         if (!telegramId) return;
         sendJson(res, 200, buildPulse(30));
+        return;
+      }
+
+      if (path === "/api/trade/buy" && req.method === "POST") {
+        const telegramId = requireAuth(req, res);
+        if (!telegramId) return;
+        let body: any = {};
+        try {
+          body = JSON.parse(await readBody(req));
+        } catch {
+          sendJson(res, 400, { ok: false, error: "Invalid JSON" });
+          return;
+        }
+        sendJson(res, 200, await executeBuy(telegramId, body));
         return;
       }
 

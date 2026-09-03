@@ -38,6 +38,8 @@ function fmtNum(n, d = 2) {
   return Number(n).toFixed(d);
 }
 
+let lastBuySize = 0.1;
+
 function tokenCard(t) {
   const liq = fmtNum(t.liquiditySol, 3);
   const top = t.top10 != null ? fmtNum(t.top10, 1) + "%" : "—";
@@ -47,10 +49,12 @@ function tokenCard(t) {
     t.reasons && t.reasons.length
       ? `<div class="reasons">${t.reasons.slice(0, 2).join(" · ")}</div>`
       : "";
+  const mint = t.mint || "";
+  const sym = (t.symbol || "???").replace(/[<>"']/g, "");
   return `
-    <div class="token">
+    <div class="token" data-mint="${mint}" data-symbol="${sym}">
       <div class="token-top">
-        <div class="sym">$${t.symbol || "???"}<span>${t.name || ""}</span></div>
+        <div class="sym">$${sym}<span>${t.name || ""}</span></div>
         <div class="age">${ageLabel(t.ageSeconds)}</div>
       </div>
       <div class="metrics">
@@ -60,7 +64,8 @@ function tokenCard(t) {
         <div>${frzOk}</div>
       </div>
       ${reasons}
-      <div class="mint">${short(t.mint)}</div>
+      <div class="mint">${short(mint)}</div>
+      <button class="buy-btn" type="button">BUY</button>
     </div>`;
 }
 
@@ -70,6 +75,38 @@ function fillCol(el, list, emptyMsg) {
     return;
   }
   el.innerHTML = list.map(tokenCard).join("");
+  el.querySelectorAll(".buy-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const card = btn.closest(".token");
+      const mint = card?.dataset.mint;
+      const symbol = card?.dataset.symbol;
+      if (!mint) return;
+      const size = Number(document.getElementById("inMaxBuy").value) || lastBuySize;
+      if (!confirm(`Buy $${symbol} with ${size} SOL via Jupiter?`)) return;
+      btn.disabled = true;
+      btn.textContent = "…";
+      try {
+        const r = await api("/api/trade/buy", {
+          method: "POST",
+          body: JSON.stringify({ mint, amountSol: size, symbol })
+        });
+        if (r.ok) {
+          btn.textContent = "SENT";
+          alert("Submitted: " + (r.signature || "ok"));
+          await loadDashboard();
+        } else {
+          btn.textContent = "BUY";
+          alert(r.error || "Buy failed");
+        }
+      } catch (err) {
+        btn.textContent = "BUY";
+        alert(String(err.message || err));
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
 }
 
 async function loadDashboard() {
@@ -112,8 +149,16 @@ async function loadDashboard() {
     `Pass  ${d.scanner.passed}\n` +
     `Skip  ${d.scanner.rejected}`;
 
-  document.getElementById("posBox").textContent =
-    d.positions.length === 0 ? "No open positions" : JSON.stringify(d.positions);
+  if (!d.positions.length) {
+    document.getElementById("posBox").textContent = "No open positions";
+  } else {
+    document.getElementById("posBox").textContent = d.positions
+      .map(
+        (p) =>
+          `$${p.symbol || short(p.mint)}  ${p.entrySol} SOL\n${short(p.signature)}`
+      )
+      .join("\n\n");
+  }
 
   const setVal = (id, v) => {
     const el = document.getElementById(id);
@@ -123,6 +168,7 @@ async function loadDashboard() {
   setVal("inSlip", d.settings.slippage);
   setVal("inSl", d.settings.stopLoss);
   setVal("inCap", d.settings.dailyLossCap);
+  lastBuySize = d.settings.maxBuy;
 
   document
     .getElementById("btnClearKill")
@@ -136,7 +182,7 @@ async function loadPulse() {
   document.getElementById("cntSkip").textContent = String(p.rejected.length);
 
   document.getElementById("pulseMeta").textContent = p.scannerRunning
-    ? "Scanner LIVE · real pump.fun creates"
+    ? "Scanner LIVE · BUY uses Jupiter routes"
     : "Scanner idle · showing last saved tokens";
 
   fillCol(
