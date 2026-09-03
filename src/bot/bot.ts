@@ -19,8 +19,11 @@ import {
   hasReferralRecord,
   listWallets,
   setActiveWallet,
-  deleteWalletById
+  deleteWalletById,
+  countAllWallets
 } from "../db/repositories.js";
+
+import { getResolvedDatabasePath } from "../db/sqlite.js";
 
 import {
   createWallet,
@@ -59,7 +62,6 @@ import {
   referralKeyboard,
   decisionsKeyboard,
   walletsListKeyboard,
-  walletManageKeyboard,
   scannerKeyboard,
   activityKeyboard,
   buyPromptKeyboard,
@@ -161,8 +163,7 @@ export async function notifyAdminTradeExecuted(
 }
 
 function adminTimestamp(): string {
-  const d = new Date();
-  return d.toLocaleString("en-US", { hour12: true });
+  return new Date().toLocaleString("en-US", { hour12: true });
 }
 
 function requireUser(ctx: Context): number {
@@ -188,6 +189,31 @@ function describeUser(from: {
   return `${name} (${from.id})`;
 }
 
+function onboardingText(): string {
+  const dbPath = getResolvedDatabasePath();
+  const total = countAllWallets();
+  const onVolume = dbPath.startsWith("/data");
+
+  let persistNote = "";
+  if (!onVolume) {
+    persistNote =
+      "\n\n⚠️ <b>Storage not persistent</b>\n" +
+      "Railway volume is not mounted at <code>/data</code>.\n" +
+      "Wallets will be wiped on every redeploy.\n" +
+      "Fix: Railway → Volumes → mount <code>/data</code> → set <code>DATABASE_PATH=/data/bot.sqlite</code>";
+  } else if (total === 0) {
+    persistNote =
+      "\n\n💾 Storage is persistent. Create or import a wallet <b>once</b> — it will survive redeploys.";
+  }
+
+  return (
+    `⚡ <b>PUMP AUTO</b>\n` +
+    `Automated Solana trading terminal.\n\n` +
+    `Connect a wallet to begin.` +
+    persistNote
+  );
+}
+
 bot.command("start", async (ctx) => {
   const id = requireUser(ctx);
   const hadReferral = hasReferralRecord(id);
@@ -200,11 +226,7 @@ bot.command("start", async (ctx) => {
     );
   }
   if (!hasWallet(id)) {
-    await render(
-      ctx,
-      `⚡ <b>PUMP AUTO</b>\nAutomated Solana trading terminal.\nConnect a wallet to begin.`,
-      onboardingKeyboard()
-    );
+    await render(ctx, onboardingText(), onboardingKeyboard());
     return;
   }
   await render(ctx, await homeText(id), mainKeyboard());
@@ -255,7 +277,7 @@ bot.on("message:text", async (ctx) => {
     if (awaiting === "buy_ca") {
       setAwaitingInput(id, null);
       await ctx.reply(
-        `🔎 <b>TOKEN RECEIVED</b>\n<code>${input}</code>\n\nAnalysis and manual execution path is not fully wired for live fills yet.\nNo trade was submitted.`,
+        `🔎 <b>TOKEN RECEIVED</b>\n<code>${input}</code>\n\nUse Web Terminal → TRENDING → BUY for live execution.`,
         { parse_mode: "HTML", reply_markup: mainKeyboard() }
       );
       return;
@@ -307,6 +329,9 @@ bot.on("callback_query:data", async (ctx) => {
   try {
     if (data === "home") {
       setAwaitingInput(id, null);
+      if (!hasWallet(id)) {
+        return render(ctx, onboardingText(), onboardingKeyboard());
+      }
       return render(ctx, await homeText(id), mainKeyboard());
     }
     if (data === "help") {
@@ -367,7 +392,7 @@ bot.on("callback_query:data", async (ctx) => {
       setAwaitingInput(id, "wallet_import");
       return render(
         ctx,
-        `🔑 <b>IMPORT WALLET</b>\n\nSend your private key or recovery phrase.\n⚠️ Never send this to support.`,
+        `🔑 <b>IMPORT WALLET</b>\n\nSend your private key.\n⚠️ Never send this to support.`,
         backKeyboard()
       );
     }
@@ -377,7 +402,7 @@ bot.on("callback_query:data", async (ctx) => {
     if (data === "wallet:copy") {
       const address = getAddress(id);
       if (!address) {
-        return render(ctx, "No wallet connected.", onboardingKeyboard());
+        return render(ctx, onboardingText(), onboardingKeyboard());
       }
       await ctx.reply(`📋 <code>${address}</code>`, { parse_mode: "HTML" });
       return;
@@ -385,7 +410,7 @@ bot.on("callback_query:data", async (ctx) => {
     if (data === "wallet:export") {
       return render(
         ctx,
-        `⚠️ <b>EXPORT PRIVATE KEY</b>\n\nOnly export if you need a backup.\nAnyone with this key controls the funds.`,
+        `⚠️ <b>EXPORT PRIVATE KEY</b>\n\nOnly export if you need a backup.`,
         new InlineKeyboard()
           .text("⚠️ Confirm Export", "wallet:export:confirm")
           .row()
@@ -442,7 +467,7 @@ bot.on("callback_query:data", async (ctx) => {
     if (data === "wallet:tx") {
       return render(
         ctx,
-        "💳 <b>TRANSACTIONS</b>\n\nNo local trade history yet.\nOn-chain history appears after real fills.",
+        "💳 <b>TRANSACTIONS</b>\n\nSee Web Terminal → POSITIONS / Automation activity for fills.",
         walletKeyboard()
       );
     }
@@ -505,19 +530,19 @@ bot.on("callback_query:data", async (ctx) => {
     if (data === "auto:start:confirm") {
       const s = getSettings(id);
       if (!hasWallet(id)) {
-        return render(ctx, "⚠️ Connect a wallet first.", onboardingKeyboard());
+        return render(ctx, onboardingText(), onboardingKeyboard());
       }
       if (s.kill_switch) {
         return render(
           ctx,
-          `🛑 <b>EMERGENCY STOP ACTIVE</b>\n\nAutomated operation is locked.`,
+          `🛑 <b>EMERGENCY STOP ACTIVE</b>`,
           backKeyboard()
         );
       }
       updateSettings(id, { auto_state: "running" });
       return render(
         ctx,
-        `🤖 <b>AUTO-HUNTER</b>\n● HUNTING\n\nScanner is evaluating new tokens against your filters.`,
+        `🤖 <b>AUTO-HUNTER</b>\n● HUNTING`,
         hunterActiveKeyboard()
       );
     }
@@ -525,7 +550,7 @@ bot.on("callback_query:data", async (ctx) => {
       updateSettings(id, { auto_state: "stopped" });
       return render(
         ctx,
-        `⏹ <b>HUNTER STOPPED</b>\n\nNo new automated entries.\nOpen positions unchanged.`,
+        `⏹ <b>HUNTER STOPPED</b>`,
         new InlineKeyboard()
           .text("▶️ RESUME", "auto:resume")
           .row()
@@ -551,11 +576,9 @@ bot.on("callback_query:data", async (ctx) => {
       updateSettings(id, { auto_state: "stopped", kill_switch: 1 });
       return render(
         ctx,
-        `🛑 <b>AUTOMATION STOPPED</b>\n\nAuto-Hunter: OFF\nNew automated entries: BLOCKED\nOpen positions: UNCHANGED`,
+        `🛑 <b>AUTOMATION STOPPED</b>`,
         new InlineKeyboard()
           .text("▶️ RESTART HUNTER", "auto:resume")
-          .row()
-          .text("📊 POSITIONS", "positions")
           .row()
           .text("← HOME", "home")
       );
@@ -591,7 +614,7 @@ bot.on("callback_query:data", async (ctx) => {
       if (!base) {
         return render(
           ctx,
-          `🖥 <b>WEB TERMINAL</b>\n\nWEB_BASE_URL is not configured on the server.\nSet it to your public Railway URL, then reopen this button.`,
+          `🖥 <b>WEB TERMINAL</b>\n\nWEB_BASE_URL is not configured.`,
           backKeyboard()
         );
       }
@@ -599,7 +622,7 @@ bot.on("callback_query:data", async (ctx) => {
       const link = `${base}/auth/callback?token=${encodeURIComponent(token)}`;
       return render(
         ctx,
-        `🖥 <b>WEB TERMINAL</b>\n\nSame wallet, settings, scanner, and hunter state as Telegram.\nPrivate keys are never shown in the web UI.\n\nLink expires in <b>10 minutes</b>.`,
+        `🖥 <b>WEB TERMINAL</b>\n\nLink expires in <b>10 minutes</b>.`,
         new InlineKeyboard()
           .url("Open Terminal", link)
           .row()
