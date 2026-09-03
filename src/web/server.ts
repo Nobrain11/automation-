@@ -20,6 +20,7 @@ import {
   clearKill,
   emergencyStop,
   executeBuy,
+  executeSell,
   patchSettings,
   startHunter,
   stopHunter
@@ -132,36 +133,36 @@ export function startWebServer(): void {
       }
 
       if (path === "/api/me" && req.method === "GET") {
-        const telegramId = requireAuth(req, res);
-        if (!telegramId) return;
-        sendJson(res, 200, { telegramId });
+        const id = requireAuth(req, res);
+        if (!id) return;
+        sendJson(res, 200, { telegramId: id });
         return;
       }
 
       if (path === "/api/dashboard" && req.method === "GET") {
-        const telegramId = requireAuth(req, res);
-        if (!telegramId) return;
-        sendJson(res, 200, await buildDashboard(telegramId));
+        const id = requireAuth(req, res);
+        if (!id) return;
+        sendJson(res, 200, await buildDashboard(id));
         return;
       }
 
       if (path === "/api/activity" && req.method === "GET") {
-        const telegramId = requireAuth(req, res);
-        if (!telegramId) return;
+        const id = requireAuth(req, res);
+        if (!id) return;
         sendJson(res, 200, buildActivity(40));
         return;
       }
 
       if (path === "/api/pulse" && req.method === "GET") {
-        const telegramId = requireAuth(req, res);
-        if (!telegramId) return;
+        const id = requireAuth(req, res);
+        if (!id) return;
         sendJson(res, 200, buildPulse(30));
         return;
       }
 
       if (path === "/api/trade/buy" && req.method === "POST") {
-        const telegramId = requireAuth(req, res);
-        if (!telegramId) return;
+        const id = requireAuth(req, res);
+        if (!id) return;
         let body: any = {};
         try {
           body = JSON.parse(await readBody(req));
@@ -169,13 +170,27 @@ export function startWebServer(): void {
           sendJson(res, 400, { ok: false, error: "Invalid JSON" });
           return;
         }
-        sendJson(res, 200, await executeBuy(telegramId, body));
+        sendJson(res, 200, await executeBuy(id, body));
+        return;
+      }
+
+      if (path === "/api/trade/sell" && req.method === "POST") {
+        const id = requireAuth(req, res);
+        if (!id) return;
+        let body: any = {};
+        try {
+          body = JSON.parse(await readBody(req));
+        } catch {
+          sendJson(res, 400, { ok: false, error: "Invalid JSON" });
+          return;
+        }
+        sendJson(res, 200, await executeSell(id, body));
         return;
       }
 
       if (path === "/api/settings" && req.method === "POST") {
-        const telegramId = requireAuth(req, res);
-        if (!telegramId) return;
+        const id = requireAuth(req, res);
+        if (!id) return;
         let body: Record<string, unknown> = {};
         try {
           body = JSON.parse(await readBody(req));
@@ -183,35 +198,35 @@ export function startWebServer(): void {
           sendJson(res, 400, { ok: false, error: "Invalid JSON" });
           return;
         }
-        sendJson(res, 200, patchSettings(telegramId, body));
+        sendJson(res, 200, patchSettings(id, body));
         return;
       }
 
       if (path === "/api/hunter/start" && req.method === "POST") {
-        const telegramId = requireAuth(req, res);
-        if (!telegramId) return;
-        sendJson(res, 200, startHunter(telegramId));
+        const id = requireAuth(req, res);
+        if (!id) return;
+        sendJson(res, 200, startHunter(id));
         return;
       }
 
       if (path === "/api/hunter/stop" && req.method === "POST") {
-        const telegramId = requireAuth(req, res);
-        if (!telegramId) return;
-        sendJson(res, 200, stopHunter(telegramId));
+        const id = requireAuth(req, res);
+        if (!id) return;
+        sendJson(res, 200, stopHunter(id));
         return;
       }
 
       if (path === "/api/hunter/kill" && req.method === "POST") {
-        const telegramId = requireAuth(req, res);
-        if (!telegramId) return;
-        sendJson(res, 200, emergencyStop(telegramId));
+        const id = requireAuth(req, res);
+        if (!id) return;
+        sendJson(res, 200, emergencyStop(id));
         return;
       }
 
       if (path === "/api/hunter/clear-kill" && req.method === "POST") {
-        const telegramId = requireAuth(req, res);
-        if (!telegramId) return;
-        sendJson(res, 200, clearKill(telegramId));
+        const id = requireAuth(req, res);
+        if (!id) return;
+        sendJson(res, 200, clearKill(id));
         return;
       }
 
