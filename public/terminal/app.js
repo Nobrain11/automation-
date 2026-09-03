@@ -1,10 +1,11 @@
-/** PUMP AUTO terminal — bottom nav workspaces, real data only */
+/** PUMP AUTO terminal — bottom nav + live DexScreener trending */
 
 let state = {
   tab: "home",
   dash: null,
   pulse: null,
-  trendCat: "new",
+  trending: null,
+  trendCat: "trending",
   menuView: null
 };
 
@@ -48,6 +49,23 @@ function fmtNum(n, d = 2) {
   return Number(n).toFixed(d);
 }
 
+function fmtUsd(n) {
+  if (n == null || Number.isNaN(Number(n))) return "—";
+  const v = Number(n);
+  if (v >= 1e6) return "$" + (v / 1e6).toFixed(2) + "M";
+  if (v >= 1e3) return "$" + (v / 1e3).toFixed(1) + "K";
+  if (v >= 1) return "$" + v.toFixed(2);
+  if (v >= 0.0001) return "$" + v.toFixed(4);
+  return "$" + v.toExponential(2);
+}
+
+function fmtPct(n) {
+  if (n == null || Number.isNaN(Number(n))) return "—";
+  const v = Number(n);
+  const sign = v >= 0 ? "+" : "";
+  return sign + v.toFixed(1) + "%";
+}
+
 function hunterLabel(s) {
   if (!s) return "● READY";
   if (s.state === "hunting") return "● HUNTING";
@@ -58,11 +76,8 @@ function hunterLabel(s) {
 
 function updateTopbar(d) {
   if (!d) return;
-  const sol =
-    d.sol && d.sol.price != null
-      ? `SOL $${d.sol.price.toFixed(2)}`
-      : "SOL —";
-  document.getElementById("solMetric").textContent = sol;
+  document.getElementById("solMetric").textContent =
+    d.sol && d.sol.price != null ? `SOL $${d.sol.price.toFixed(2)}` : "SOL —";
   document.getElementById("balMetric").textContent =
     d.wallet.balanceSol == null
       ? "Bal —"
@@ -70,41 +85,54 @@ function updateTopbar(d) {
   document.getElementById("huntMetric").textContent = hunterLabel(d.hunter);
 }
 
-function tokenCard(t, opts = {}) {
-  const liq = fmtNum(t.liquiditySol, 3);
-  const top = t.top10 != null ? fmtNum(t.top10, 1) + "%" : "—";
-  const mintOk = t.mintRevoked
-    ? '<span class="ok">mint✓</span>'
-    : '<span class="bad">mint✗</span>';
-  const frzOk = t.freezeRevoked
-    ? '<span class="ok">frz✓</span>'
-    : '<span class="bad">frz✗</span>';
+function tokenCard(t) {
+  const mint = t.mint || "";
+  const sym = (t.symbol || "???").replace(/[<>"']/g, "");
+  const name = (t.name || "").replace(/[<>"']/g, "");
+  const price = t.priceUsd != null ? fmtUsd(t.priceUsd) : "—";
+  const mcap = t.marketCap != null ? fmtUsd(t.marketCap) : "—";
+  const liqUsd = t.liquidityUsd != null ? fmtUsd(t.liquidityUsd) : null;
+  const liqSol =
+    t.liquiditySol != null ? fmtNum(t.liquiditySol, 3) + " SOL" : null;
+  const liq = liqUsd || liqSol || "—";
+  const vol = t.volume24h != null ? fmtUsd(t.volume24h) : "—";
+  const chg = t.priceChange24h != null ? fmtPct(t.priceChange24h) : "—";
+  const chgClass =
+    t.priceChange24h == null
+      ? ""
+      : t.priceChange24h >= 0
+        ? "ok"
+        : "bad";
+  const mom =
+    t.priceChange5m != null
+      ? fmtPct(t.priceChange5m) + " 5m"
+      : t.priceChange1h != null
+        ? fmtPct(t.priceChange1h) + " 1h"
+        : "—";
   const reasons =
     t.reasons && t.reasons.length
       ? `<div class="reasons">${t.reasons.slice(0, 2).join(" · ")}</div>`
       : "";
-  const mint = t.mint || "";
-  const sym = (t.symbol || "???").replace(/[<>"']/g, "");
-  const buy = opts.buy !== false;
+
   return `
     <div class="token" data-mint="${mint}" data-symbol="${sym}">
       <div class="token-top">
-        <div class="sym">$${sym}<span>${t.name || ""}</span></div>
-        <div class="age">${ageLabel(t.ageSeconds)}</div>
+        <div class="sym">$${sym}<span>${name}</span></div>
+        <div class="age ${chgClass}">${chg}</div>
       </div>
       <div class="metrics">
-        <div>liq <b>${liq}</b> SOL</div>
-        <div>top10 <b>${top}</b></div>
-        <div>${mintOk}</div>
-        <div>${frzOk}</div>
-        <div>price <b>—</b></div>
-        <div>mcap <b>—</b></div>
+        <div>price <b>${price}</b></div>
+        <div>mcap <b>${mcap}</b></div>
+        <div>liq <b>${liq}</b></div>
+        <div>vol 24h <b>${vol}</b></div>
+        <div>mom <b>${mom}</b></div>
+        <div>age <b>${ageLabel(t.ageSeconds)}</b></div>
       </div>
       ${reasons}
       <div class="mint">${mint}</div>
       <div class="token-actions">
         <button type="button" class="action ghost copy-ca">Copy CA</button>
-        ${buy ? '<button type="button" class="action primary buy-btn">BUY</button>' : ""}
+        <button type="button" class="action primary buy-btn">BUY</button>
       </div>
     </div>`;
 }
@@ -186,41 +214,42 @@ Balance: ${d.wallet?.balanceSol == null ? "—" : d.wallet.balanceSol.toFixed(4)
         <span>MONITOR</span><span class="arrow">↓</span>
         <span>EXIT</span>
       </div>
-      <p class="muted">Automation only enters when filters + risk rules pass. Trending does not auto-trade.</p>
+      <p class="muted">Trending does not auto-trade. Automation only enters after filters + risk.</p>
     </div>`;
 }
 
-function renderTrending(d, pulse) {
+function trendListForCat(tr) {
+  if (!tr) return [];
   const cat = state.trendCat;
-  const items =
-    cat === "passed"
-      ? pulse?.passed || []
-      : cat === "rejected"
-        ? pulse?.rejected || []
-        : pulse?.newPairs || [];
+  if (cat === "momentum") return tr.momentum || [];
+  if (cat === "gainers") return tr.gainers || [];
+  if (cat === "liquidity") return tr.liquidity || [];
+  if (cat === "new") return tr.newPairs || [];
+  if (cat === "passed") return tr.passed || [];
+  return tr.trending || [];
+}
 
-  const offline =
-    !pulse ||
-    (!pulse.scannerRunning &&
-      !(pulse.newPairs && pulse.newPairs.length) &&
-      !(pulse.passed && pulse.passed.length));
+function renderTrending(d, tr) {
+  const cat = state.trendCat;
+  const items = trendListForCat(tr);
+  const offline = !tr || !tr.online;
 
   const list = items.length
     ? items.map((t) => tokenCard(t)).join("")
-    : `<div class="empty">No tokens in this category yet.</div>`;
+    : `<div class="empty">No tokens in this category right now.</div>`;
 
   return `
     <div class="panel">
       <h1>TRENDING</h1>
-      <p class="muted">LIVE MARKET DISCOVERY — scanner / evaluated tokens only. No fabricated prices.</p>
-      ${offline ? `<div class="offline-banner">MARKET DATA OFFLINE — waiting for scanner discoveries. Price / mcap / volume fields stay blank until a live market feed is connected.</div>` : ""}
+      <p class="muted">LIVE MARKET DISCOVERY · DexScreener + pump scanner. No fabricated prices.</p>
+      ${offline ? `<div class="offline-banner">MARKET DATA OFFLINE${tr?.error ? " — " + tr.error : ""}. Showing scanner-only rows when available.</div>` : `<div class="muted">Source: ${tr?.source || "—"}</div>`}
       <div class="chips">
+        <button type="button" class="chip ${cat === "trending" ? "active" : ""}" data-cat="trending">🔥 TRENDING</button>
+        <button type="button" class="chip ${cat === "momentum" ? "active" : ""}" data-cat="momentum">⚡ MOMENTUM</button>
+        <button type="button" class="chip ${cat === "gainers" ? "active" : ""}" data-cat="gainers">📈 GAINERS</button>
         <button type="button" class="chip ${cat === "new" ? "active" : ""}" data-cat="new">🆕 NEW</button>
-        <button type="button" class="chip ${cat === "passed" ? "active" : ""}" data-cat="passed">🔥 QUALIFIED</button>
-        <button type="button" class="chip ${cat === "rejected" ? "active" : ""}" data-cat="rejected">🚫 REJECTED</button>
-        <button type="button" class="chip" disabled title="Needs market feed">⚡ MOMENTUM</button>
-        <button type="button" class="chip" disabled title="Needs market feed">📈 GAINERS</button>
-        <button type="button" class="chip" disabled title="Needs market feed">💧 LIQUIDITY</button>
+        <button type="button" class="chip ${cat === "liquidity" ? "active" : ""}" data-cat="liquidity">💧 LIQUIDITY</button>
+        <button type="button" class="chip ${cat === "passed" ? "active" : ""}" data-cat="passed">✓ QUALIFIED</button>
         <button type="button" class="chip" disabled title="Not configured">👀 WATCHLIST</button>
       </div>
     </div>
@@ -271,7 +300,7 @@ Strategy: filter pass → Jupiter entry</div>
         <span>MONITOR</span><span class="arrow">↓</span>
         <span>EXIT</span>
       </div>
-      <p class="muted">Live steps appear only from real scanner decisions — no mock activity.</p>
+      <p class="muted">Live steps only from real scanner decisions.</p>
     </div>
 
     <div class="panel">
@@ -287,12 +316,12 @@ Strategy: filter pass → Jupiter entry</div>
       <div class="setting-row"><span>Max trades / day</span><b>${s.maxTradesDay}</b></div>
       <div class="setting-row"><span>Smart money boost</span><b>${s.smartMoneyBoost ? "ON" : "OFF"}</b></div>
       <div class="setting-row"><span>TP tiers</span><b>${(s.tpTiers || []).map((t) => `+${t.profit}/${t.sellPercent}`).join(" · ") || "—"}</b></div>
-      <p class="muted" style="margin-top:10px">Edit buy size / slippage on TRADE tab. Advanced filters use Telegram Settings.</p>
+      <p class="muted" style="margin-top:10px">Edit sizes on TRADE tab.</p>
     </div>
 
     <div class="panel">
       <h2>ACTIVITY</h2>
-      <div id="autoActivity" class="mono">Load pulse for recent decisions…</div>
+      <div id="autoActivity" class="mono">—</div>
     </div>`;
 }
 
@@ -301,7 +330,7 @@ function renderTrade(d) {
   return `
     <div class="panel">
       <h1>TRADE</h1>
-      <p class="muted">Manual size &amp; slippage for Quick Buy. Execution via Jupiter when a route exists.</p>
+      <p class="muted">Manual size &amp; slippage for Quick Buy (Jupiter).</p>
       <label class="field">Buy size (SOL)
         <input id="inMaxBuy" type="number" step="0.01" min="0.01" value="${s.maxBuy ?? 0.1}" />
       </label>
@@ -315,10 +344,6 @@ function renderTrade(d) {
         <input id="inCap" type="number" step="0.05" min="0" value="${s.dailyLossCap ?? 0.5}" />
       </label>
       <button type="button" class="action primary" id="btnSaveSettings">Save</button>
-    </div>
-    <div class="panel">
-      <h2>QUICK NOTE</h2>
-      <p class="muted">Use TRENDING → BUY on a token card. Brand-new bonding curves may show “No Jupiter route” until liquid.</p>
     </div>`;
 }
 
@@ -386,7 +411,7 @@ Keys never shown in web UI — manage in Telegram.</div>
         <button type="button" class="action danger" id="btnMenuKill">Emergency Stop</button>
         <button type="button" class="action ghost" id="btnLogout">Logout</button>
       </div>
-      <p class="muted">Learn / Referral / Support remain in Telegram for now.</p>
+      <p class="muted">Learn / Referral / Support remain in Telegram.</p>
     </div>`;
 }
 
@@ -403,20 +428,19 @@ function render() {
   updateTopbar(state.dash);
 
   if (state.tab === "home") ws.innerHTML = renderHome(d);
-  else if (state.tab === "trending") ws.innerHTML = renderTrending(d, state.pulse);
+  else if (state.tab === "trending")
+    ws.innerHTML = renderTrending(d, state.trending);
   else if (state.tab === "automation") ws.innerHTML = renderAutomation(d);
   else if (state.tab === "trade") ws.innerHTML = renderTrade(d);
   else if (state.tab === "positions") ws.innerHTML = renderPositions(d);
   else if (state.tab === "menu") ws.innerHTML = renderMenu(d);
 
-  // activity feed from pulse
-  if (state.tab === "automation" && state.pulse) {
+  if (state.tab === "automation") {
     const act = document.getElementById("autoActivity");
     if (act) {
-      const rows = (state.pulse.newPairs || []).slice(0, 12);
-      if (!rows.length) {
-        act.textContent = "No evaluated tokens yet.";
-      } else {
+      const rows = (state.pulse?.newPairs || []).slice(0, 12);
+      if (!rows.length) act.textContent = "No evaluated tokens yet.";
+      else
         act.innerHTML = rows
           .map((t) => {
             const tms = t.discoveredAt
@@ -426,7 +450,6 @@ function render() {
             return `<div class="feed-line"><b>${tms}</b> · ${res} · $${t.symbol || short(t.mint)}</div>`;
           })
           .join("");
-      }
     }
   }
 
@@ -550,9 +573,12 @@ async function refresh() {
   try {
     state.dash = await api("/api/dashboard");
     state.pulse = await api("/api/pulse");
+    if (state.tab === "trending" || !state.trending) {
+      state.trending = await api("/api/trending");
+    }
     render();
   } catch {
-    /* gate handled */
+    /* gate */
   }
 }
 
@@ -573,4 +599,4 @@ boot();
 setInterval(() => {
   if (document.getElementById("app").classList.contains("hidden")) return;
   refresh();
-}, 5000);
+}, 8000);
