@@ -1,10 +1,12 @@
-// src/web/server.ts — PUMP AUTO terminal webapp
+// src/web/server.ts
 
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
 
 import { config } from "../config.js";
+import { countAllWallets } from "../db/repositories.js";
+import { getResolvedDatabasePath } from "../db/sqlite.js";
 import { logger } from "../utils/logger.js";
 import {
   createSession,
@@ -248,7 +250,20 @@ export function startWebServer(): void {
       }
 
       if (path === "/health") {
-        sendJson(res, 200, { ok: true, publicDir: PUBLIC_DIR });
+        const dbPath = getResolvedDatabasePath();
+        const wallets = countAllWallets();
+        const persistent = dbPath.startsWith("/data");
+        sendJson(res, 200, {
+          ok: true,
+          dbPath,
+          walletRows: wallets,
+          persistentVolume: persistent,
+          hint: persistent
+            ? wallets > 0
+              ? "Volume OK — wallets stored"
+              : "Volume OK — no wallets yet (create once in Telegram)"
+            : "NO /data volume — wallets wipe on every deploy. Mount volume at /data"
+        });
         return;
       }
 

@@ -1,5 +1,4 @@
-// Live market: micro-cap pump spikes (10k–15k style), not million-dollar coins
-// pump.fun frontend API is Cloudflare-blocked → DexScreener public data
+// DexScreener only — fast parallel micro-cap spike movers
 
 import { logger } from "../utils/logger.js";
 
@@ -41,16 +40,15 @@ export interface MarketToken {
   spikeScore?: number;
 }
 
-/** Micro-cap band for early pump.fun-style coins */
-const MCAP_MIN = 3_000; // ignore dust / broken quotes
-const MCAP_MAX = 80_000; // not millions — early curve territory
-const SPIKE_5M = 25; // strong short-term move
+const MCAP_MIN = 3_000;
+const MCAP_MAX = 80_000;
+const SPIKE_5M = 25;
 const SPIKE_1H = 40;
-const HARD_SPIKE_5M = 50; // +50% in minutes
+const HARD_SPIKE_5M = 50;
 
 let cacheMovers: { at: number; tokens: MarketToken[] } | null = null;
 let cacheBoosted: { at: number; tokens: MarketToken[] } | null = null;
-const CACHE_MS = 25_000; // faster refresh for spikes
+const CACHE_MS = 20_000;
 
 function num(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -86,7 +84,6 @@ export function buildTokenReview(t: {
   let score = 35;
   const labels: string[] = [];
   const risks: string[] = [];
-
   const liq = t.liquidityUsd ?? 0;
   const vol1h = t.volume1h ?? 0;
   const mcap = t.marketCap ?? 0;
@@ -97,18 +94,16 @@ export function buildTokenReview(t: {
       ? (Date.now() - t.pairCreatedAt) / 3_600_000
       : null;
 
-  // Micro-cap is the target — reward early size, penalize large caps
   if (mcap > 0 && mcap <= 15_000) {
     score += 16;
     labels.push("Micro-cap ~10k");
   } else if (mcap <= 40_000) {
     score += 10;
     labels.push("Small-cap");
-  } else if (mcap <= 80_000) {
-    score += 4;
-  } else if (mcap > 500_000) {
+  } else if (mcap <= 80_000) score += 4;
+  else if (mcap > 500_000) {
     score -= 20;
-    risks.push("Too large for early mover");
+    risks.push("Too large");
   }
 
   if (chg5 != null && chg5 >= HARD_SPIKE_5M) {
@@ -130,12 +125,7 @@ export function buildTokenReview(t: {
   if (vol1h >= 5_000) {
     score += 10;
     labels.push("1h volume");
-  } else if (vol1h >= 1_000) {
-    score += 5;
-  } else if (vol1h < 200 && (chg5 ?? 0) > 20) {
-    risks.push("Spike on tiny volume");
-    score -= 4;
-  }
+  } else if (vol1h >= 1_000) score += 5;
 
   if (liq >= 2_000 && liq <= 25_000) {
     score += 8;
@@ -143,8 +133,6 @@ export function buildTokenReview(t: {
   } else if (liq < 800) {
     score -= 10;
     risks.push("Illiquid");
-  } else if (liq > 100_000) {
-    score -= 6;
   }
 
   if (ageH != null) {
@@ -154,8 +142,6 @@ export function buildTokenReview(t: {
     } else if (ageH < 6) {
       score += 4;
       labels.push("Early pair");
-    } else if (ageH > 48) {
-      score -= 6;
     }
   }
 
@@ -164,21 +150,12 @@ export function buildTokenReview(t: {
     labels.push("Pump route");
   }
 
-  const sells = t.txnsSells24h ?? 0;
-  const buys = t.txnsBuys24h ?? 0;
-  if (buys + sells > 20) {
-    const sellShare = sells / (buys + sells);
-    if (sellShare > 0.7) {
-      score -= 12;
-      risks.push("Sell-heavy");
-    }
-  }
-
   score = Math.max(0, Math.min(100, Math.round(score)));
   const grade = gradeFromScore(score);
   let summary = `Score ${score}/100 (${grade}).`;
   if (mcap > 0) summary += ` Mcap ~$${Math.round(mcap).toLocaleString()}.`;
-  if (chg5 != null && chg5 >= 20) summary += ` 5m ${chg5 >= 0 ? "+" : ""}${chg5.toFixed(0)}%.`;
+  if (chg5 != null && chg5 >= 20)
+    summary += ` 5m ${chg5 >= 0 ? "+" : ""}${chg5.toFixed(0)}%.`;
   if (risks.length) summary += ` Risks: ${risks.slice(0, 2).join("; ")}.`;
 
   return {
@@ -194,8 +171,38 @@ function isPumpPair(pair: any): boolean {
   const dex = String(pair?.dexId || "").toLowerCase();
   if (dex.includes("pump")) return true;
   const base = String(pair?.baseToken?.address || "");
-  if (base.toLowerCase().endsWith("pump")) return true;
-  return false;
+  return base.toLowerCase().endsWith("pump");
+}
+
+function spikeRank(t: {
+  marketCap: number | null;
+  priceChange5m: number | null;
+  priceChange1h: number | null;
+  volume1h: number | null;
+  pairCreatedAt: number | null;
+}): number {
+  const mcap = t.marketCap ?? 0;
+  const c5 = t.priceChange5m ?? 0;
+  const c1 = t.priceChange1h ?? 0;
+  const v1 = t.volume1h ?? 0;
+  const ageH =
+    t.pairCreatedAt != null
+      ? (Date.now() - t.pairCreatedAt) / 3_600_000
+      : 99;
+  let s = 0;
+  if (mcap >= 5_000 && mcap <= 15_000) s += 40;
+  else if (mcap <= 30_000) s += 28;
+  else if (mcap <= 60_000) s += 12;
+  else if (mcap > 200_000) s -= 40;
+  if (c5 >= 50) s += 50;
+  else if (c5 >= 25) s += 30;
+  else if (c5 >= 10) s += 12;
+  else if (c5 < 0) s -= 15;
+  if (c1 >= 40) s += 18;
+  if (v1 >= 2_000) s += 10;
+  if (ageH < 2) s += 15;
+  else if (ageH < 8) s += 8;
+  return s;
 }
 
 function mapPair(
@@ -208,14 +215,6 @@ function mapPair(
 
   const socials = Array.isArray(pair?.info?.socials) ? pair.info.socials : [];
   const websites = Array.isArray(pair?.info?.websites) ? pair.info.websites : [];
-  const twitter =
-    socials.find((s: any) => String(s.type || "").toLowerCase() === "twitter")
-      ?.url || null;
-  const telegram =
-    socials.find((s: any) => String(s.type || "").toLowerCase() === "telegram")
-      ?.url || null;
-  const website = websites[0]?.url || null;
-
   const isPump = isPumpPair(pair);
   const base = {
     liquidityUsd: num(pair?.liquidity?.usd),
@@ -253,9 +252,13 @@ function mapPair(
     boosts: base.boosts,
     txnsBuys24h: base.txnsBuys24h,
     txnsSells24h: base.txnsSells24h,
-    website,
-    twitter,
-    telegram,
+    website: websites[0]?.url || null,
+    twitter:
+      socials.find((s: any) => String(s.type || "").toLowerCase() === "twitter")
+        ?.url || null,
+    telegram:
+      socials.find((s: any) => String(s.type || "").toLowerCase() === "telegram")
+        ?.url || null,
     isPump,
     review: null,
     source,
@@ -265,52 +268,11 @@ function mapPair(
   return token;
 }
 
-/** Higher = more like a sudden micro-cap pump */
-function spikeRank(t: {
-  marketCap: number | null;
-  priceChange5m: number | null;
-  priceChange1h: number | null;
-  volume1h: number | null;
-  liquidityUsd: number | null;
-  pairCreatedAt: number | null;
-}): number {
-  const mcap = t.marketCap ?? 0;
-  const c5 = t.priceChange5m ?? 0;
-  const c1 = t.priceChange1h ?? 0;
-  const v1 = t.volume1h ?? 0;
-  const ageH =
-    t.pairCreatedAt != null
-      ? (Date.now() - t.pairCreatedAt) / 3_600_000
-      : 99;
-
-  let s = 0;
-  // Prefer 5k–25k mcap (classic early pump zone)
-  if (mcap >= 5_000 && mcap <= 15_000) s += 40;
-  else if (mcap <= 30_000) s += 28;
-  else if (mcap <= 60_000) s += 12;
-  else if (mcap > 200_000) s -= 40;
-
-  if (c5 >= 50) s += 50;
-  else if (c5 >= 25) s += 30;
-  else if (c5 >= 10) s += 12;
-  else if (c5 < 0) s -= 15;
-
-  if (c1 >= 40) s += 18;
-  if (v1 >= 2_000) s += 10;
-  if (ageH < 2) s += 15;
-  else if (ageH < 8) s += 8;
-
-  return s;
-}
-
 function isMicroCapSpike(t: MarketToken): boolean {
   const mcap = t.marketCap;
   if (mcap == null || mcap < MCAP_MIN || mcap > MCAP_MAX) return false;
-
   const c5 = t.priceChange5m ?? 0;
   const c1 = t.priceChange1h ?? 0;
-
-  // Must be moving hard in the short window
   if (c5 >= SPIKE_5M) return true;
   if (c5 >= 15 && c1 >= SPIKE_1H) return true;
   if (c1 >= 60 && mcap <= 40_000) return true;
@@ -321,21 +283,17 @@ async function searchPairs(q: string): Promise<any[]> {
   try {
     const res = await fetch(
       `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`,
-      { signal: AbortSignal.timeout(10000) }
+      { signal: AbortSignal.timeout(6000) }
     );
     if (!res.ok) return [];
     const data: any = await res.json();
     return Array.isArray(data?.pairs) ? data.pairs : [];
-  } catch (e) {
-    logger.warn(`Dex search failed for ${q}`, e);
+  } catch {
     return [];
   }
 }
 
-/**
- * Early pump movers: micro-cap + sudden % spike.
- * Excludes million-dollar / large graduated names.
- */
+/** Fast parallel DexScreener → micro-cap spikes only */
 export async function fetchPumpMovers(): Promise<{
   online: boolean;
   tokens: MarketToken[];
@@ -346,12 +304,14 @@ export async function fetchPumpMovers(): Promise<{
   }
 
   try {
-    // Broad net, then hard-filter to micro spikes
-    const queries = ["pump", "pumpswap", "sol", "meme", "coin"];
-    const allPairs: any[] = [];
-    for (const q of queries) {
-      allPairs.push(...(await searchPairs(q)));
-    }
+    const started = Date.now();
+    // Parallel — not sequential
+    const batches = await Promise.all([
+      searchPairs("pump"),
+      searchPairs("pumpswap"),
+      searchPairs("sol")
+    ]);
+    const allPairs = batches.flat();
 
     const solPairs = allPairs.filter(
       (p) => (p.chainId || "").toLowerCase() === "solana"
@@ -362,7 +322,6 @@ export async function fetchPumpMovers(): Promise<{
       const mint = p.baseToken?.address;
       if (!mint) continue;
       const mcap = num(p.marketCap) ?? 0;
-      // Drop obvious mega-caps early
       if (mcap > MCAP_MAX * 3) continue;
 
       const prev = best.get(mint);
@@ -379,14 +338,10 @@ export async function fetchPumpMovers(): Promise<{
       .map((p) => mapPair(p, "pump-movers"))
       .filter(Boolean) as MarketToken[];
 
-    // Prefer pump-route when available
     const pumpTokens = tokens.filter((t) => t.isPump);
     if (pumpTokens.length >= 5) tokens = pumpTokens;
 
-    // Hard filter: micro-cap spikes only
     let spikes = tokens.filter(isMicroCapSpike);
-
-    // If DexScreener is quiet, show nearest micro-caps by spike score
     if (spikes.length < 5) {
       spikes = tokens
         .filter((t) => {
@@ -401,6 +356,9 @@ export async function fetchPumpMovers(): Promise<{
 
     const top = spikes.slice(0, 30);
     cacheMovers = { at: Date.now(), tokens: top };
+    logger.info(
+      `DexScreener movers: ${top.length} tokens in ${Date.now() - started}ms`
+    );
     return { online: top.length > 0, tokens: top };
   } catch (error) {
     logger.warn("fetchPumpMovers failed", error);
@@ -422,7 +380,7 @@ export async function fetchBoostedSolana(): Promise<{
   }
   try {
     const res = await fetch("https://api.dexscreener.com/token-boosts/top/v1", {
-      signal: AbortSignal.timeout(8000)
+      signal: AbortSignal.timeout(5000)
     });
     if (!res.ok) {
       return { online: false, tokens: [], error: `boosts ${res.status}` };
@@ -435,18 +393,8 @@ export async function fetchBoostedSolana(): Promise<{
     const mints = solana
       .map((x) => x.tokenAddress)
       .filter(Boolean)
-      .slice(0, 30) as string[];
+      .slice(0, 20) as string[];
     const enriched = await enrichMints(mints);
-    const descBy = new Map(
-      solana.map((x) => [x.tokenAddress, x.description || null])
-    );
-    const iconBy = new Map(solana.map((x) => [x.tokenAddress, x.icon || null]));
-    for (const t of enriched) {
-      if (!t.description) t.description = descBy.get(t.mint) || null;
-      if (!t.imageUrl && iconBy.get(t.mint))
-        t.imageUrl = String(iconBy.get(t.mint));
-    }
-    // Keep boosts only if still micro-ish
     const filtered = enriched.filter((t) => {
       const m = t.marketCap;
       return m == null || (m >= MCAP_MIN && m <= 150_000);
@@ -463,37 +411,33 @@ export async function fetchBoostedSolana(): Promise<{
 }
 
 export async function enrichMints(mints: string[]): Promise<MarketToken[]> {
-  const unique = [...new Set(mints.filter(Boolean))].slice(0, 30);
+  const unique = [...new Set(mints.filter(Boolean))].slice(0, 20);
   if (!unique.length) return [];
   const out: MarketToken[] = [];
-  const chunkSize = 15;
-  for (let i = 0; i < unique.length; i += chunkSize) {
-    const chunk = unique.slice(i, i + chunkSize);
-    try {
-      const res = await fetch(
-        `https://api.dexscreener.com/latest/dex/tokens/${chunk.join(",")}`,
-        { signal: AbortSignal.timeout(10000) }
-      );
-      if (!res.ok) continue;
-      const data: any = await res.json();
-      const pairs: any[] = Array.isArray(data?.pairs) ? data.pairs : [];
-      const best = new Map<string, any>();
-      for (const p of pairs) {
-        if ((p.chainId || "").toLowerCase() !== "solana") continue;
-        const mint = p.baseToken?.address;
-        if (!mint) continue;
-        const prev = best.get(mint);
-        const liq = num(p.liquidity?.usd) || 0;
-        const prevLiq = prev ? num(prev.liquidity?.usd) || 0 : -1;
-        if (!prev || liq > prevLiq) best.set(mint, p);
-      }
-      for (const p of best.values()) {
-        const mapped = mapPair(p);
-        if (mapped) out.push(mapped);
-      }
-    } catch (error) {
-      logger.warn("enrichMints chunk failed", error);
+  try {
+    const res = await fetch(
+      `https://api.dexscreener.com/latest/dex/tokens/${unique.join(",")}`,
+      { signal: AbortSignal.timeout(7000) }
+    );
+    if (!res.ok) return [];
+    const data: any = await res.json();
+    const pairs: any[] = Array.isArray(data?.pairs) ? data.pairs : [];
+    const best = new Map<string, any>();
+    for (const p of pairs) {
+      if ((p.chainId || "").toLowerCase() !== "solana") continue;
+      const mint = p.baseToken?.address;
+      if (!mint) continue;
+      const prev = best.get(mint);
+      const liq = num(p.liquidity?.usd) || 0;
+      const prevLiq = prev ? num(prev.liquidity?.usd) || 0 : -1;
+      if (!prev || liq > prevLiq) best.set(mint, p);
     }
+    for (const p of best.values()) {
+      const mapped = mapPair(p);
+      if (mapped) out.push(mapped);
+    }
+  } catch (error) {
+    logger.warn("enrichMints failed", error);
   }
   return out;
 }
@@ -501,13 +445,11 @@ export async function enrichMints(mints: string[]): Promise<MarketToken[]> {
 export function sortByVolume(tokens: MarketToken[]): MarketToken[] {
   return [...tokens].sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0));
 }
-
 export function sortByChange(tokens: MarketToken[]): MarketToken[] {
   return [...tokens].sort(
     (a, b) => (b.priceChange5m || 0) - (a.priceChange5m || 0)
   );
 }
-
 export function sortByMomentum(tokens: MarketToken[]): MarketToken[] {
   return [...tokens].sort((a, b) => {
     const ma = (a.priceChange5m || 0) * 3 + (a.priceChange1h || 0);
@@ -515,19 +457,16 @@ export function sortByMomentum(tokens: MarketToken[]): MarketToken[] {
     return mb - ma;
   });
 }
-
 export function sortByLiquidity(tokens: MarketToken[]): MarketToken[] {
   return [...tokens].sort(
     (a, b) => (b.liquidityUsd || 0) - (a.liquidityUsd || 0)
   );
 }
-
 export function sortByScore(tokens: MarketToken[]): MarketToken[] {
   return [...tokens].sort(
     (a, b) => (b.review?.score || 0) - (a.review?.score || 0)
   );
 }
-
 export function sortBySpike(tokens: MarketToken[]): MarketToken[] {
   return [...tokens].sort((a, b) => (b.spikeScore || 0) - (a.spikeScore || 0));
 }
