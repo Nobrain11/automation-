@@ -1,4 +1,4 @@
-/** PUMP AUTO terminal — bottom nav + live DexScreener trending */
+/** PUMP AUTO terminal — production UI */
 
 let state = {
   tab: "home",
@@ -98,11 +98,7 @@ function tokenCard(t) {
   const vol = t.volume24h != null ? fmtUsd(t.volume24h) : "—";
   const chg = t.priceChange24h != null ? fmtPct(t.priceChange24h) : "—";
   const chgClass =
-    t.priceChange24h == null
-      ? ""
-      : t.priceChange24h >= 0
-        ? "ok"
-        : "bad";
+    t.priceChange24h == null ? "" : t.priceChange24h >= 0 ? "ok" : "bad";
   const mom =
     t.priceChange5m != null
       ? fmtPct(t.priceChange5m) + " 5m"
@@ -233,7 +229,6 @@ function renderTrending(d, tr) {
   const cat = state.trendCat;
   const items = trendListForCat(tr);
   const offline = !tr || !tr.online;
-
   const list = items.length
     ? items.map((t) => tokenCard(t)).join("")
     : `<div class="empty">No tokens in this category right now.</div>`;
@@ -241,8 +236,8 @@ function renderTrending(d, tr) {
   return `
     <div class="panel">
       <h1>TRENDING</h1>
-      <p class="muted">LIVE MARKET DISCOVERY · DexScreener + pump scanner. No fabricated prices.</p>
-      ${offline ? `<div class="offline-banner">MARKET DATA OFFLINE${tr?.error ? " — " + tr.error : ""}. Showing scanner-only rows when available.</div>` : `<div class="muted">Source: ${tr?.source || "—"}</div>`}
+      <p class="muted">LIVE MARKET DISCOVERY · DexScreener + pump scanner.</p>
+      ${offline ? `<div class="offline-banner">MARKET DATA OFFLINE${tr?.error ? " — " + tr.error : ""}</div>` : `<div class="muted">Source: ${tr?.source || "—"}</div>`}
       <div class="chips">
         <button type="button" class="chip ${cat === "trending" ? "active" : ""}" data-cat="trending">🔥 TRENDING</button>
         <button type="button" class="chip ${cat === "momentum" ? "active" : ""}" data-cat="momentum">⚡ MOMENTUM</button>
@@ -250,7 +245,6 @@ function renderTrending(d, tr) {
         <button type="button" class="chip ${cat === "new" ? "active" : ""}" data-cat="new">🆕 NEW</button>
         <button type="button" class="chip ${cat === "liquidity" ? "active" : ""}" data-cat="liquidity">💧 LIQUIDITY</button>
         <button type="button" class="chip ${cat === "passed" ? "active" : ""}" data-cat="passed">✓ QUALIFIED</button>
-        <button type="button" class="chip" disabled title="Not configured">👀 WATCHLIST</button>
       </div>
     </div>
     <div class="panel">
@@ -274,9 +268,8 @@ Scanner: ${sc.running ? "LIVE" : "OFF"}
 Tokens scanned: ${sc.evaluated ?? 0}
 Qualified: ${sc.passed ?? 0}
 Open positions: ${(d.positions || []).length}
-Daily PnL: No completed closes yet
 Daily loss cap: ${s.dailyLossCap ?? "—"} SOL
-Strategy: filter pass → Jupiter entry</div>
+Strategy: filter pass → Jupiter · monitor exits</div>
       <div class="row">
         ${
           hunting
@@ -300,7 +293,6 @@ Strategy: filter pass → Jupiter entry</div>
         <span>MONITOR</span><span class="arrow">↓</span>
         <span>EXIT</span>
       </div>
-      <p class="muted">Live steps only from real scanner decisions.</p>
     </div>
 
     <div class="panel">
@@ -315,13 +307,11 @@ Strategy: filter pass → Jupiter entry</div>
       <div class="setting-row"><span>Max trades / hour</span><b>${s.maxTradesHour}</b></div>
       <div class="setting-row"><span>Max trades / day</span><b>${s.maxTradesDay}</b></div>
       <div class="setting-row"><span>Smart money boost</span><b>${s.smartMoneyBoost ? "ON" : "OFF"}</b></div>
-      <div class="setting-row"><span>TP tiers</span><b>${(s.tpTiers || []).map((t) => `+${t.profit}/${t.sellPercent}`).join(" · ") || "—"}</b></div>
-      <p class="muted" style="margin-top:10px">Edit sizes on TRADE tab.</p>
     </div>
 
     <div class="panel">
       <h2>ACTIVITY</h2>
-      <div id="autoActivity" class="mono">—</div>
+      <div id="autoActivity"></div>
     </div>`;
 }
 
@@ -330,7 +320,6 @@ function renderTrade(d) {
   return `
     <div class="panel">
       <h1>TRADE</h1>
-      <p class="muted">Manual size &amp; slippage for Quick Buy (Jupiter).</p>
       <label class="field">Buy size (SOL)
         <input id="inMaxBuy" type="number" step="0.01" min="0.01" value="${s.maxBuy ?? 0.1}" />
       </label>
@@ -386,8 +375,7 @@ Kill: ${d.hunter?.killSwitch ? "ON" : "OFF"}</div>
       <div class="panel">
         <h1>WALLET</h1>
         <div class="mono">${d.wallet?.connected ? d.wallet.address : "Not connected"}
-Balance: ${d.wallet?.balanceSol == null ? "—" : d.wallet.balanceSol.toFixed(4) + " SOL"}
-Keys never shown in web UI — manage in Telegram.</div>
+Balance: ${d.wallet?.balanceSol == null ? "—" : d.wallet.balanceSol.toFixed(4) + " SOL"}</div>
         <button type="button" class="action ghost" data-menu-back>← Menu</button>
       </div>`;
   }
@@ -395,7 +383,7 @@ Keys never shown in web UI — manage in Telegram.</div>
     return `
       <div class="panel">
         <h1>PNL</h1>
-        <div class="mono">${d.pnl?.note || "No completed trades yet"}</div>
+        <div class="mono">${d.pnl?.note || "No trades yet"}</div>
         <button type="button" class="action ghost" data-menu-back>← Menu</button>
       </div>`;
   }
@@ -406,12 +394,11 @@ Keys never shown in web UI — manage in Telegram.</div>
         <button type="button" class="action" data-menu="wallet">Wallet</button>
         <button type="button" class="action" data-menu="pnl">PnL</button>
         <button type="button" class="action" data-menu="status">Status</button>
-        <button type="button" class="action" data-go="trade">Settings / Trade params</button>
-        <button type="button" class="action" data-go="automation">Risk / Automation</button>
+        <button type="button" class="action" data-go="trade">Trade params</button>
+        <button type="button" class="action" data-go="automation">Automation</button>
         <button type="button" class="action danger" id="btnMenuKill">Emergency Stop</button>
         <button type="button" class="action ghost" id="btnLogout">Logout</button>
       </div>
-      <p class="muted">Learn / Referral / Support remain in Telegram.</p>
     </div>`;
 }
 
@@ -422,6 +409,7 @@ function render() {
     scanner: {},
     settings: {},
     positions: [],
+    trades: [],
     pnl: {}
   };
   const ws = document.getElementById("workspace");
@@ -438,18 +426,33 @@ function render() {
   if (state.tab === "automation") {
     const act = document.getElementById("autoActivity");
     if (act) {
-      const rows = (state.pulse?.newPairs || []).slice(0, 12);
-      if (!rows.length) act.textContent = "No evaluated tokens yet.";
-      else
-        act.innerHTML = rows
+      const trades = d.trades || [];
+      if (trades.length) {
+        act.innerHTML = trades
+          .slice(0, 20)
           .map((t) => {
-            const tms = t.discoveredAt
-              ? new Date(t.discoveredAt).toLocaleTimeString()
-              : "—";
-            const res = t.passed ? "FILTER PASSED" : "FILTER SKIP";
-            return `<div class="feed-line"><b>${tms}</b> · ${res} · $${t.symbol || short(t.mint)}</div>`;
+            const tms = new Date(t.createdAt).toLocaleTimeString();
+            const label =
+              t.status === "submitted"
+                ? `${t.side.toUpperCase()} ${t.status}`
+                : `${t.side.toUpperCase()} ${t.status}`;
+            return `<div class="feed-line"><b>${tms}</b> · ${label} · ${short(t.mint)} · ${t.amountSol} SOL${t.error ? " · " + t.error : ""}</div>`;
           })
           .join("");
+      } else {
+        const rows = (state.pulse?.newPairs || []).slice(0, 12);
+        if (!rows.length) act.innerHTML = `<div class="empty">No activity yet</div>`;
+        else
+          act.innerHTML = rows
+            .map((t) => {
+              const tms = t.discoveredAt
+                ? new Date(t.discoveredAt).toLocaleTimeString()
+                : "—";
+              const res = t.passed ? "FILTER PASSED" : "FILTER SKIP";
+              return `<div class="feed-line"><b>${tms}</b> · ${res} · $${t.symbol || short(t.mint)}</div>`;
+            })
+            .join("");
+      }
     }
   }
 
