@@ -13,6 +13,7 @@ import {
   sortByLiquidity,
   sortByMomentum,
   sortByScore,
+  sortBySpike,
   sortByVolume,
   MarketToken
 } from "../services/market.js";
@@ -208,6 +209,7 @@ function mergeMarket(scannerRow: any, m: MarketToken | undefined) {
     twitter: m?.twitter ?? null,
     telegram: m?.telegram ?? null,
     review: m?.review ?? null,
+    spikeScore: m?.spikeScore ?? null,
     marketOnline: Boolean(m && m.priceUsd != null)
   };
 }
@@ -228,35 +230,46 @@ export async function buildTrending() {
     .filter((t) => t.passed)
     .map((t) => mergeMarket(t, byMint.get(t.mint)));
 
-  // Merge movers + boosted, prefer higher volume
   const poolMap = new Map<string, MarketToken>();
   for (const t of [...movers.tokens, ...boosted.tokens]) {
     const prev = poolMap.get(t.mint);
-    if (!prev || (t.volume24h || 0) > (prev.volume24h || 0)) {
+    if (!prev || (t.spikeScore || 0) > (prev.spikeScore || 0)) {
       poolMap.set(t.mint, t);
     }
   }
   const marketPool = [...poolMap.values()];
-  const pumpOnly = marketPool.filter((t) => t.isPump);
 
   const online = movers.online || boosted.online || enrichedScan.length > 0;
 
   return {
     online,
     error: online ? null : movers.error || boosted.error || null,
-    trending: sortByVolume(marketPool).slice(0, 30),
-    movers: sortByVolume(pumpOnly.length ? pumpOnly : marketPool).slice(0, 30),
-    momentum: sortByMomentum(marketPool).slice(0, 25),
-    gainers: sortByChange(marketPool).slice(0, 25),
-    liquidity: sortByLiquidity(marketPool).slice(0, 25),
-    scored: sortByScore(marketPool).slice(0, 25),
+    // Default MOVERS = micro-cap spikes only (already filtered in fetchPumpMovers)
+    movers: sortBySpike(movers.tokens).slice(0, 30),
+    trending: sortBySpike(marketPool).slice(0, 30),
+    momentum: sortByMomentum(
+      marketPool.filter((t) => (t.marketCap ?? 0) <= 80_000)
+    ).slice(0, 25),
+    gainers: sortByChange(
+      marketPool.filter((t) => (t.marketCap ?? 0) <= 80_000)
+    ).slice(0, 25),
+    liquidity: sortByLiquidity(
+      marketPool.filter((t) => {
+        const m = t.marketCap ?? 0;
+        return m >= 3_000 && m <= 80_000;
+      })
+    ).slice(0, 25),
+    scored: sortByScore(
+      marketPool.filter((t) => (t.marketCap ?? 0) <= 80_000)
+    ).slice(0, 25),
     newPairs,
     passed,
     source: movers.online
-      ? "dexscreener-pump-movers"
+      ? "micro-cap-spikes"
       : boosted.online
         ? "dexscreener-boosted"
-        : "scanner-only"
+        : "scanner-only",
+    note: "Movers = mcap ~$3k–$80k with sharp 5m/1h pumps (target ~$10k–$15k). Mega-caps excluded."
   };
 }
 
