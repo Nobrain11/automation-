@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PUMP AUTO — Pulse Terminal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PUMP AUTO — Terminal</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -11,92 +11,48 @@
     <div class="card">
       <div class="logo">⚡ PUMP AUTO</div>
       <p>Open from Telegram → <b>WEB TERMINAL</b>.</p>
-      <p class="muted">Login link expires in 10 minutes. Real scanner data only.</p>
+      <p class="muted">Login expires in 10 minutes. Real data only.</p>
     </div>
   </div>
 
-  <div id="app" class="hidden">
+  <div id="app" class="app hidden">
     <header class="topbar">
       <div class="brand">
         <span class="mark">⚡</span>
-        <span>PUMP AUTO</span>
-        <span class="pill" id="scanPill">SCANNER</span>
+        <div>
+          <div class="brand-title">PUMP AUTO</div>
+          <div class="brand-sub">SOLANA TRADING TERMINAL</div>
+        </div>
       </div>
       <div class="top-metrics">
-        <div class="metric" id="solMetric">SOL —</div>
-        <div class="metric" id="balMetric">Bal —</div>
-        <div class="metric" id="huntMetric">Hunter —</div>
-      </div>
-      <div class="top-actions">
-        <button id="btnRefresh" class="ghost">Refresh</button>
-        <button id="btnLogout" class="ghost">Logout</button>
+        <span id="solMetric">SOL —</span>
+        <span id="balMetric">Bal —</span>
+        <span id="huntMetric">—</span>
       </div>
     </header>
 
-    <div class="shell">
-      <aside class="rail">
-        <div class="rail-title">TRADE</div>
-        <label class="field">Buy size (SOL)
-          <input id="inMaxBuy" type="number" step="0.01" min="0.01" />
-        </label>
-        <label class="field">Slippage %
-          <input id="inSlip" type="number" step="1" min="1" />
-        </label>
-        <label class="field">Stop loss %
-          <input id="inSl" type="number" step="1" />
-        </label>
-        <label class="field">Daily cap (SOL)
-          <input id="inCap" type="number" step="0.05" min="0" />
-        </label>
-        <button id="btnSaveSettings" class="primary block">Save</button>
+    <main id="workspace" class="workspace"></main>
 
-        <div class="rail-title mt">AUTO-HUNTER</div>
-        <div id="hunterState" class="mono small">—</div>
-        <button id="btnStart" class="primary block">Start Hunting</button>
-        <button id="btnStop" class="warn block">Stop</button>
-        <button id="btnKill" class="danger block">Emergency Stop</button>
-        <button id="btnClearKill" class="ghost block hidden">Clear Kill</button>
-
-        <div class="rail-title mt">STATS</div>
-        <div id="statsBox" class="mono small">—</div>
-
-        <div class="rail-title mt">POSITIONS</div>
-        <div id="posBox" class="pos-list"></div>
-      </aside>
-
-      <main class="pulse">
-        <div class="pulse-head">
-          <h1>PULSE</h1>
-          <span class="muted" id="pulseMeta">Live pump.fun discoveries</span>
-        </div>
-
-        <div class="cols">
-          <section class="col">
-            <header class="col-h">
-              <span class="dot new"></span> NEW PAIRS
-              <span class="count" id="cntNew">0</span>
-            </header>
-            <div id="colNew" class="col-body"></div>
-          </section>
-
-          <section class="col">
-            <header class="col-h">
-              <span class="dot pass"></span> PASSED FILTERS
-              <span class="count" id="cntPass">0</span>
-            </header>
-            <div id="colPass" class="col-body"></div>
-          </section>
-
-          <section class="col">
-            <header class="col-h">
-              <span class="dot skip"></span> REJECTED
-              <span class="count" id="cntSkip">0</span>
-            </header>
-            <div id="colSkip" class="col-body"></div>
-          </section>
-        </div>
-      </main>
-    </div>
+    <nav class="bottom-nav" aria-label="Primary">
+      <button type="button" data-tab="home" class="nav-btn active">
+        <span class="nav-ico">⌂</span><span>HOME</span>
+      </button>
+      <button type="button" data-tab="trending" class="nav-btn">
+        <span class="nav-ico">🔥</span><span>TRENDING</span>
+      </button>
+      <button type="button" data-tab="automation" class="nav-btn">
+        <span class="nav-ico">🤖</span><span>AUTOMATION</span>
+      </button>
+      <button type="button" data-tab="trade" class="nav-btn">
+        <span class="nav-ico">⚡</span><span>TRADE</span>
+      </button>
+      <button type="button" data-tab="positions" class="nav-btn">
+        <span class="nav-ico">📊</span><span>POSITIONS</span>
+      </button>
+      <button type="button" data-tab="menu" class="nav-btn">
+        <span class="nav-ico">☰</span><span>MENU</span>
+      </button>
+    </nav>
   </div>
 
   <script src="/app.js"></script>
