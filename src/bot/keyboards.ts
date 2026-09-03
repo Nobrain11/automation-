@@ -1,42 +1,49 @@
-// src/bot/keyboards.ts — REPLACE existing file
+// src/bot/keyboards.ts — PUMP AUTO terminal UI
 
 import { InlineKeyboard } from "grammy";
 
 export function onboardingKeyboard() {
   return new InlineKeyboard()
-    .text("💰 Create Wallet", "wallet:create")
+    .text("🆕 CREATE WALLET", "wallet:create")
     .row()
-    .text("🔑 Import Wallet", "wallet:import")
+    .text("🔑 IMPORT WALLET", "wallet:import")
     .row()
-    .text("📄 Help", "help");
+    .text("📚 HOW IT WORKS", "edu:how")
+    .text("🔒 SECURITY", "edu:security");
 }
 
+/** Home command center — all core actions visible */
 export function mainKeyboard() {
   return new InlineKeyboard()
-    .text("▶️ Start Auto Bot", "auto:start")
+    .text("🤖 START HUNTING", "auto:start")
     .row()
-    .text("⏹ Stop", "auto:stop")
-    .text("⚙️ Settings", "settings")
+    .text("⚡ BUY TOKEN", "buy:start")
+    .text("📉 SELL", "sell:menu")
     .row()
-    .text("📊 Status", "status")
-    .text("💼 Wallet", "wallet:menu")
+    .text("🔎 SCANNER", "scanner")
+    .text("📊 POSITIONS", "positions")
     .row()
-    .text("📈 PnL", "pnl")
-    .text("📂 Positions", "positions")
+    .text("💰 PNL", "pnl")
+    .text("👛 WALLET", "wallet:menu")
     .row()
-    .text("🆘 Emergency Kill", "auto:kill")
+    .text("⚙️ SETTINGS", "settings")
+    .text("📡 ACTIVITY", "activity")
     .row()
-    .text("📚 Learn", "help")
-    .text("🛟 Support", "support")
+    .text("📡 STATUS", "status")
+    .text("📚 LEARN", "help")
     .row()
-    .text("🔥 Trending", "market:stream")
-    .text("◎ SOL", "market:sol")
+    .text("🎁 REFERRAL", "referral")
+    .text("🆘 SUPPORT", "support")
     .row()
-    .text("🎁 Referral", "referral");
+    .text("🚨 EMERGENCY STOP", "auto:kill");
 }
 
 export function backKeyboard() {
-  return new InlineKeyboard().text("↩️ Back", "home");
+  return new InlineKeyboard().text("← HOME", "home");
+}
+
+export function backToSettingsKeyboard() {
+  return new InlineKeyboard().text("← SETTINGS", "settings");
 }
 
 export function settingsKeyboard(settings: any) {
@@ -46,27 +53,27 @@ export function settingsKeyboard(settings: any) {
     .join(" · ");
 
   return new InlineKeyboard()
-    .text(`💰 Max Buy: ${settings.max_buy}`, "setting:max_buy")
-    .text(`📉 Slippage: ${settings.slippage}%`, "setting:slippage")
+    .text(`💰 Buy: ${settings.max_buy} SOL`, "setting:max_buy")
+    .text(`📉 Slip: ${settings.slippage}%`, "setting:slippage")
     .row()
     .text(`🎯 TP: ${tpText}`, "setting:tp")
     .row()
     .text(`🛑 SL: -${settings.stop_loss}%`, "setting:stop_loss")
     .text(`📈 Trail: +${settings.trailing_after}%`, "setting:trailing_after")
     .row()
-    .text(`↘️ Pullback: ${settings.trailing_pullback}%`, "setting:trailing_pullback")
-    .text(`⏱ Time Stop: ${settings.time_stop_minutes}m`, "setting:time_stop_minutes")
+    .text(`↘️ Pull: ${settings.trailing_pullback}%`, "setting:trailing_pullback")
+    .text(`⏱ Time: ${settings.time_stop_minutes}m`, "setting:time_stop_minutes")
     .row()
-    .text(`💥 Loss Cap: ${settings.daily_loss_cap}`, "setting:daily_loss_cap")
+    .text(`💥 Cap: ${settings.daily_loss_cap} SOL`, "setting:daily_loss_cap")
     .text(
       `🧠 Smart$: ${settings.smart_money_boost ? "ON" : "OFF"}`,
       "setting:smart_money"
     )
     .row()
-    .text(`⚡ Max/Hr: ${settings.max_trades_hour}`, "setting:max_trades_hour")
-    .text(`📅 Max/Day: ${settings.max_trades_day}`, "setting:max_trades_day")
+    .text(`⚡ /Hr: ${settings.max_trades_hour}`, "setting:max_trades_hour")
+    .text(`📅 /Day: ${settings.max_trades_day}`, "setting:max_trades_day")
     .row()
-    .text("↩️ Back", "home");
+    .text("← HOME", "home");
 }
 
 export function editSettingKeyboard(field: string) {
@@ -74,173 +81,240 @@ export function editSettingKeyboard(field: string) {
     .text("−", `adjust:${field}:minus`)
     .text("+", `adjust:${field}:plus`)
     .row()
-    .text("✏️ Custom", `custom:${field}`)
+    .text("✏️ CUSTOM", `custom:${field}`)
     .row()
-    .text("↩️ Back", "settings");
+    .text("← SETTINGS", "settings");
 }
 
 export function startConfirmKeyboard() {
   return new InlineKeyboard()
-    .text("✅ Confirm Start", "auto:start:confirm")
+    .text("▶️ CONFIRM START", "auto:start:confirm")
     .row()
-    .text("❌ Cancel", "home");
+    .text("⚙️ CHANGE SETTINGS", "settings")
+    .row()
+    .text("← BACK", "home");
+}
+
+export function hunterActiveKeyboard() {
+  return new InlineKeyboard()
+    .text("⏸ PAUSE", "auto:stop")
+    .row()
+    .text("🔎 SCANNER", "scanner")
+    .text("📊 POSITIONS", "positions")
+    .row()
+    .text("📡 ACTIVITY", "activity")
+    .row()
+    .text("🛑 STOP HUNTER", "auto:stop")
+    .row()
+    .text("← HOME", "home");
 }
 
 export function emergencyKeyboard() {
   return new InlineKeyboard()
-    .text("🛑 Confirm Kill", "auto:kill:confirm")
+    .text("🚨 CONFIRM STOP", "auto:kill:confirm")
     .row()
-    .text("❌ Cancel", "home");
+    .text("✕ CANCEL", "home");
 }
 
 export function walletKeyboard() {
   return new InlineKeyboard()
-    .text("🗂 My Wallets", "wallet:list")
+    .text("📋 COPY ADDRESS", "wallet:copy")
     .row()
-    .text("📤 Export Private Key", "wallet:export")
+    .text("💳 TRANSACTIONS", "wallet:tx")
     .row()
-    .text("📥 Copy Address", "wallet:copy")
+    .text("🔄 SWITCH WALLET", "wallet:list")
+    .text("➕ ADD WALLET", "wallet:add")
     .row()
-    .text("➕ Add Wallet", "wallet:add")
+    .text("🔐 SECURITY", "edu:security")
     .row()
-    .text("🚪 Logout", "wallet:logout")
+    .text("🚪 LOGOUT", "wallet:logout")
     .row()
-    .text("↩️ Back", "home");
+    .text("← HOME", "home");
 }
 
 export function walletsListKeyboard(
   wallets: { id: number; label: string; is_active: number }[]
 ) {
   const kb = new InlineKeyboard();
-
   for (const w of wallets) {
     const marker = w.is_active ? "✅ " : "";
     kb.text(`${marker}${w.label}`, `wallet:switch:${w.id}`).row();
   }
-
-  kb.text("➕ Add Wallet", "wallet:add").row();
-  kb.text("↩️ Back", "wallet:menu");
-
+  kb.text("➕ ADD WALLET", "wallet:add").row();
+  kb.text("← WALLET", "wallet:menu");
   return kb;
 }
 
 export function walletManageKeyboard(walletId: number) {
   return new InlineKeyboard()
-    .text("✅ Make Active", `wallet:switch:${walletId}`)
+    .text("✅ MAKE ACTIVE", `wallet:switch:${walletId}`)
     .row()
-    .text("🗑 Remove", `wallet:remove:${walletId}`)
+    .text("🗑 REMOVE", `wallet:remove:${walletId}`)
     .row()
-    .text("↩️ Back", "wallet:list");
+    .text("← LIST", "wallet:list");
+}
+
+export function walletCreatedKeyboard() {
+  return new InlineKeyboard()
+    .text("📋 COPY ADDRESS", "wallet:copy")
+    .row()
+    .text("🔐 BACKUP WALLET", "wallet:export")
+    .row()
+    .text("✓ I'VE SAVED IT", "home");
+}
+
+export function scannerKeyboard() {
+  return new InlineKeyboard()
+    .text("🔥 QUALIFIED", "scanner:passed")
+    .text("🚫 REJECTED", "scanner:rejected")
+    .row()
+    .text("📡 LIVE FEED", "decisions")
+    .text("⚙️ FILTERS", "settings")
+    .row()
+    .text("🔄 REFRESH", "scanner")
+    .text("← HOME", "home");
+}
+
+export function activityKeyboard() {
+  return new InlineKeyboard()
+    .text("🔄 REFRESH", "activity")
+    .row()
+    .text("🧠 DECISIONS", "decisions")
+    .text("📊 STATUS", "status")
+    .row()
+    .text("← HOME", "home");
 }
 
 export function eduHomeKeyboard() {
   return new InlineKeyboard()
-    .text("ℹ️ How It Works", "edu:how")
-    .text("⚠️ Risks", "edu:risks")
+    .text("ℹ️ HOW IT WORKS", "edu:how")
+    .text("⚠️ RISKS", "edu:risks")
     .row()
-    .text("📊 Live Performance", "pnl")
-    .text("🤖 Strategy", "edu:strategy")
+    .text("📊 PERFORMANCE", "pnl")
+    .text("🤖 STRATEGY", "edu:strategy")
     .row()
     .text("❓ FAQ", "edu:faq")
-    .text("🔒 Security", "edu:security")
+    .text("🔒 SECURITY", "edu:security")
     .row()
-    .text("💬 Support", "support")
-    .text("↩️ Back", "home");
+    .text("💬 SUPPORT", "support")
+    .text("← HOME", "home");
 }
 
 export function eduHowKeyboard() {
   return new InlineKeyboard()
-    .text("📊 Status", "status")
-    .text("🤖 Strategy", "edu:strategy")
+    .text("📡 STATUS", "status")
+    .text("🤖 STRATEGY", "edu:strategy")
     .row()
-    .text("↩️ Back", "help");
+    .text("← LEARN", "help");
 }
 
 export function eduRisksKeyboard() {
   return new InlineKeyboard()
-    .text("⚙️ Risk Settings", "settings")
-    .text("📊 Status", "status")
+    .text("⚙️ RISK SETTINGS", "settings")
+    .text("📡 STATUS", "status")
     .row()
-    .text("↩️ Back", "help");
+    .text("← LEARN", "help");
 }
 
 export function eduStrategyKeyboard() {
   return new InlineKeyboard()
-    .text("⚙️ Change Strategy", "settings")
-    .text("↩️ Back", "help");
+    .text("⚙️ CHANGE STRATEGY", "settings")
+    .text("← LEARN", "help");
 }
 
 export function eduSecurityKeyboard() {
   return new InlineKeyboard()
-    .text("💼 Wallet", "wallet:menu")
-    .text("↩️ Back", "help");
+    .text("👛 WALLET", "wallet:menu")
+    .text("← LEARN", "help");
 }
 
 export function eduFaqListKeyboard() {
   return new InlineKeyboard()
-    .text("1. What does it do?", "faq:1")
+    .text("How does Auto-Hunter work?", "faq:1")
     .row()
-    .text("2. Guarantee profit?", "faq:2")
+    .text("Can I stop the bot?", "faq:5")
     .row()
-    .text("3. When does it buy?", "faq:3")
+    .text("How is my wallet protected?", "faq:9")
     .row()
-    .text("4. Why reject a token?", "faq:4")
+    .text("What happens at loss cap?", "faq:7")
     .row()
-    .text("5. Stop immediately?", "faq:5")
+    .text("Can the bot withdraw funds?", "faq:9")
     .row()
-    .text("6. Open positions on stop?", "faq:6")
+    .text("Why was a token rejected?", "faq:4")
     .row()
-    .text("7. How much SOL?", "faq:7")
+    .text("How are trades executed?", "faq:3")
     .row()
-    .text("8. Where are trades?", "faq:8")
-    .row()
-    .text("9. Can it withdraw?", "faq:9")
-    .row()
-    .text("10. Failed transaction?", "faq:10")
-    .row()
-    .text("↩️ Back", "help");
+    .text("← LEARN", "help");
 }
 
 export function faqAnswerKeyboard() {
   return new InlineKeyboard()
-    .text("← Questions", "edu:faq")
-    .text("↩️ Back", "help");
+    .text("← QUESTIONS", "edu:faq")
+    .text("← LEARN", "help");
 }
 
 export function stopConfirmKeyboard() {
   return new InlineKeyboard()
-    .text("⏹ Confirm Stop", "auto:stop:confirm")
+    .text("⏹ CONFIRM STOP", "auto:stop:confirm")
     .row()
-    .text("❌ Cancel", "home");
+    .text("✕ CANCEL", "home");
 }
 
 export function streamKeyboard() {
   return new InlineKeyboard()
-    .text("🔄 Refresh", "market:stream")
+    .text("🔄 REFRESH", "market:stream")
     .row()
     .url("Open pump.fun", "https://pump.fun")
     .row()
-    .text("↩️ Back", "home");
+    .text("← HOME", "home");
 }
 
 export function solPriceKeyboard() {
   return new InlineKeyboard()
-    .text("🔄 Refresh", "market:sol")
+    .text("🔄 REFRESH", "market:sol")
     .row()
-    .text("↩️ Back", "home");
+    .text("← HOME", "home");
 }
 
 export function referralKeyboard() {
   return new InlineKeyboard()
-    .text("📋 Copy Link", "referral:copy")
+    .text("📋 COPY LINK", "referral:copy")
     .row()
-    .text("↩️ Back", "home");
+    .text("← HOME", "home");
 }
 
 export function decisionsKeyboard() {
   return new InlineKeyboard()
-    .text("🔄 Refresh", "decisions")
+    .text("🔄 REFRESH", "decisions")
     .row()
-    .text("📊 Status", "status")
-    .text("↩️ Back", "home");
+    .text("📡 STATUS", "status")
+    .text("← HOME", "home");
+}
+
+export function buyPromptKeyboard() {
+  return new InlineKeyboard().text("← CANCEL", "home");
+}
+
+export function sellEmptyKeyboard() {
+  return new InlineKeyboard()
+    .text("🔎 SCANNER", "scanner")
+    .text("⚡ BUY TOKEN", "buy:start")
+    .row()
+    .text("← HOME", "home");
+}
+
+export function positionsEmptyKeyboard() {
+  return new InlineKeyboard()
+    .text("🔎 SCANNER", "scanner")
+    .text("⚡ BUY TOKEN", "buy:start")
+    .row()
+    .text("← HOME", "home");
+}
+
+export function pnlEmptyKeyboard() {
+  return new InlineKeyboard()
+    .text("🤖 START HUNTING", "auto:start")
+    .text("⚡ BUY TOKEN", "buy:start")
+    .row()
+    .text("← HOME", "home");
 }

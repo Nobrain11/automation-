@@ -1,77 +1,96 @@
-// src/bot/screens.ts - extended with education layer (no mock data)
+// src/bot/screens.ts — PUMP AUTO terminal screens (real data only)
 
 import { getSettings, getReferralStats } from "../db/repositories.js";
 import { getRecentTokens } from "../db/scanner-repository.js";
 import { getAddress, getBalance } from "../services/wallet.js";
 import { scanner } from "../scanner/scanner-instance.js";
 
-export async function homeText(
-  telegramId: number
-): Promise<string> {
+function shortAddr(addr: string): string {
+  if (addr.length < 10) return addr;
+  return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
+}
+
+export async function homeText(telegramId: number): Promise<string> {
   const s = getSettings(telegramId);
   const address = getAddress(telegramId);
 
-  let balance = "unavailable";
+  let balanceStr = "—";
   if (address) {
     try {
-      balance = `${(await getBalance(telegramId)).toFixed(4)} SOL`;
+      const balanceNum = await getBalance(telegramId);
+      balanceStr = `${balanceNum.toFixed(4)} SOL`;
     } catch {
-      balance = "unavailable";
+      balanceStr = "unavailable";
     }
   }
 
   const stats = scanner.getStats();
 
-  const tradingLabel = s.kill_switch
-    ? "🛑 KILL SWITCH ACTIVE"
+  const hunterState = s.kill_switch
+    ? "● STOPPED (KILL)"
     : s.auto_state === "running"
-      ? "🟢 RUNNING"
+      ? "● HUNTING"
       : s.auto_state === "paused"
-        ? "🟡 PAUSED"
-        : "🔴 STOPPED";
+        ? "● PAUSED"
+        : "● READY";
+
+  const scannerLabel = stats.running ? "LIVE" : "OFF";
+  const qualified = stats.passed;
+  const evaluated = stats.evaluated;
+  const discovered = stats.discovered;
 
   return `
-🚀 <b>PUMP AUTO</b>
-
-Button-driven Solana automation.
-
-Wallet:
-<code>${address ?? "not connected"}</code>
-Balance: ${balance}
-
-Scanner: ${
-    stats.running ? "🟢 ACTIVE" : "🔴 NOT ACTIVE"
-  }
-Discovered: ${stats.discovered} · Evaluated: ${stats.evaluated}
-
-Trading: ${tradingLabel}
+⚡ <b>PUMP AUTO</b>
+SOLANA TRADING TERMINAL
+━━━━━━━━━━━━━━━━━━━━
+<b>WALLET</b>
+${address ? shortAddr(address) : "not connected"}
+${balanceStr}
+━━━━━━━━━━━━━━━━━━━━
+🤖 <b>AUTO-HUNTER</b>
+${hunterState}
+Scanner             ${scannerLabel}
+Discovered          ${discovered}
+Evaluated           ${evaluated}
+Qualified           ${qualified}
+Open Positions      0
+Today's PnL         No data
+━━━━━━━━━━━━━━━━━━━━
+🔥 <b>MARKET</b>
+${discovered} tokens discovered
+${qualified} passed filters
+${evaluated} fully evaluated
+━━━━━━━━━━━━━━━━━━━━
 `.trim();
 }
 
-export function walletCreatedText(
-  address: string,
-  privateKey: string
-) {
+export function walletCreatedText(address: string, privateKey: string) {
   return `
-💰 <b>WALLET CREATED</b>
+✓ <b>WALLET CREATED</b>
 
 Address:
 <code>${address}</code>
 
-⚠️ <b>SAVE THIS PRIVATE KEY NOW.</b>
+Your recovery information is shown
+<b>only during this secure setup flow</b>.
+
+⚠️ Never share your private key or
+recovery phrase with anyone.
 
 <code>${privateKey}</code>
 
-We will not automatically show this private key again.
+We will not show this key again automatically.
 `.trim();
 }
 
 export function walletImportedText(address: string) {
   return `
-✅ <b>WALLET IMPORTED</b>
+✓ <b>WALLET READY</b>
 
 Address:
 <code>${address}</code>
+
+Your wallet is now connected.
 `.trim();
 }
 
@@ -86,10 +105,9 @@ export function settingsText(telegramId: number) {
     .join("\n");
 
   return `
-⚙️ <b>AUTO SETTINGS</b>
-
-Tap any parameter below to adjust it.
-
+⚙️ <b>SETTINGS</b>
+Configure your trading engine.
+━━━━━━━━━━━━━━━━━━━━
 💰 Max Buy: <b>${s.max_buy} SOL</b>
 📉 Slippage: <b>${s.slippage}%</b>
 
@@ -98,124 +116,84 @@ ${tpText}
 
 🛑 Stop Loss: <b>-${s.stop_loss}%</b>
 📈 Trailing After: <b>+${s.trailing_after}%</b>
-↘️ Trailing Pullback: <b>${s.trailing_pullback}%</b>
+↘️ Pullback: <b>${s.trailing_pullback}%</b>
 ⏱ Time Stop: <b>${s.time_stop_minutes} min</b>
 
 💥 Daily Loss Cap: <b>${s.daily_loss_cap} SOL</b>
-⚡ Max Trades: <b>${s.max_trades_hour}/hour · ${s.max_trades_day}/day</b>
-
-🧠 Smart Money Boost: <b>${
-    s.smart_money_boost ? "ON" : "OFF"
-  }</b>
+⚡ Max Trades: <b>${s.max_trades_hour}/hr · ${s.max_trades_day}/day</b>
+🧠 Smart Money: <b>${s.smart_money_boost ? "ON" : "OFF"}</b>
 `.trim();
 }
 
 export function pnlText(telegramId: number) {
+  void telegramId;
   return `
-📈 <b>LIVE PERFORMANCE</b>
+💰 <b>PERFORMANCE</b>
 
-Trades today: <b>0</b>
-Total trades: <b>0</b>
-Wins: <b>0</b> · Losses: <b>0</b>
-Win rate: <b>—</b>
+No completed trades yet.
 
-Realized PnL (today): <b>0 SOL</b>
-Realized PnL (all-time): <b>0 SOL</b>
-Unrealized PnL: <b>0 SOL</b>
+Your PnL will appear here after
+the first completed trade.
 
-No completed trades recorded yet.
+No mock data.
 `.trim();
 }
 
 export function positionsText(telegramId: number) {
+  void telegramId;
   return `
-📂 <b>OPEN POSITIONS</b>
+📊 <b>POSITIONS</b>
 
 No open positions.
 
-Auto-trading entry is not active yet (or no positions are open).
+There are currently no open trades.
 `.trim();
 }
 
 export function supportText() {
-  const contact = process.env.SUPPORT_CONTACT;
-
-  if (!contact) {
-    return `
-🛟 <b>SUPPORT</b>
-
-Need help with setup, trading configuration, scanner, transactions, or wallet issues?
-
-Before contacting support, open <b>Status</b> for the latest system information.
-
-Support contact is not configured on this instance yet.
-`.trim();
-  }
-
   return `
-🛟 <b>SUPPORT</b>
+🆘 <b>SUPPORT</b>
 
-Need help with setup, trading configuration, scanner, transactions, or wallet issues?
+What do you need help with?
 
-Before contacting support, open <b>Status</b> for the latest system information.
-
-Reach out:
-${contact}
+Use Learn / FAQ for common questions.
+Never send private keys or recovery
+phrases to support.
 `.trim();
 }
 
 export function statusText(telegramId: number) {
   const s = getSettings(telegramId);
-  const stats = scanner.getStats();
   const address = getAddress(telegramId);
+  const stats = scanner.getStats();
 
-  const botState =
-    s.kill_switch
-      ? "🛑 KILL SWITCH ACTIVE"
-      : s.auto_state === "running"
-        ? "🟢 RUNNING"
-        : s.auto_state === "paused"
-          ? "🟡 PAUSED"
-          : "🔴 STOPPED";
-
-  const dropEntries = Object.entries(stats.dropReasons)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
-
-  const dropLines = dropEntries.length
-    ? dropEntries
-        .map(([reason, count]) => `• ${reason}: ${count}`)
-        .join("\n")
-    : "• none yet";
+  const hunter = s.kill_switch
+    ? "● STOPPED"
+    : s.auto_state === "running"
+      ? "● HUNTING"
+      : "● READY";
 
   return `
 📡 <b>SYSTEM STATUS</b>
-
-<b>Wallet</b>
-• Connected: ${address ? "YES" : "NO"}
-• Address: ${address ? `<code>${address.slice(0, 4)}…${address.slice(-4)}</code>` : "—"}
-
-<b>Scanner</b>
-• Status: ${stats.running ? "🟢 ACTIVE" : "🔴 NOT ACTIVE"}
-• Discovered: ${stats.discovered}
-• Evaluated: ${stats.evaluated}
-• Passed: ${stats.passed}
-• Reconnects: ${stats.websocketReconnects}
-
-<b>Not Evaluated — Why</b>
-${dropLines}
-
-<b>Trading</b>
-• Status: ${botState}
-• Open positions: 0
-
-<b>Protection</b>
-• Daily loss cap: ${s.daily_loss_cap} SOL
-• Emergency kill: ${s.kill_switch ? "ACTIVE" : "READY"}
-• Max trades: ${s.max_trades_hour}/hr · ${s.max_trades_day}/day
-
-<b>Smart Money</b>
-• ${s.smart_money_boost ? "ON" : "OFF"}
+Bot                 ● ONLINE
+Solana RPC          ● configured
+Scanner             ${stats.running ? "● LIVE" : "● OFF"}
+Trading Engine      ${hunter}
+Wallet              ${address ? "● CONNECTED" : "● NONE"}
+━━━━━━━━━━━━━━━━━━━━
+Discovered: ${stats.discovered}
+Evaluated:  ${stats.evaluated}
+Passed:     ${stats.passed}
+Rejected:   ${stats.rejected}
+Reconnects: ${stats.websocketReconnects}
+━━━━━━━━━━━━━━━━━━━━
+AUTO-HUNTER
+${hunter}
+Last event: ${
+    stats.lastEventAt
+      ? `${Math.max(0, Math.floor((Date.now() - stats.lastEventAt) / 1000))}s ago`
+      : "No data"
+  }
 `.trim();
 }
 
@@ -223,75 +201,50 @@ export function helpHomeText() {
   return `
 📚 <b>PUMP AUTO GUIDE</b>
 
-Learn exactly what PUMP AUTO does before turning automation on.
-
-Every section explains the feature, what the bot is doing, and what you should expect.
+Learn exactly what PUMP AUTO does
+before turning automation on.
 `.trim();
 }
 
 export function howItWorksText(telegramId: number) {
-  const s = getSettings(telegramId);
   const stats = scanner.getStats();
-
-  const scannerLabel = stats.running ? "ACTIVE" : "NOT ACTIVE";
-  const tradingLabel = s.kill_switch
-    ? "KILL SWITCH"
-    : s.auto_state === "running"
-      ? "RUNNING"
-      : s.auto_state === "paused"
-        ? "PAUSED"
-        : "STOPPED";
-
+  void telegramId;
   return `
-ℹ️ <b>HOW PUMP AUTO WORKS</b>
+ℹ️ <b>HOW IT WORKS</b>
 
-1. 🔎 <b>Discover</b>
-The scanner watches for tokens from configured data sources.
+1. Fetch new tokens
+2. Apply your filters
+3. Analyze the opportunity
+4. Score the signal
+5. Enter when conditions qualify
+6. Manage the position
+7. Exit using your rules
+8. Record the result
 
-2. 🧪 <b>Evaluate</b>
-Each discovered token is checked against your current filters.
+SCAN → FILTER → ENTER
+→ MANAGE → EXIT
 
-3. 🛡️ <b>Risk Check</b>
-Tokens that fail safety requirements are rejected.
-
-4. 🎯 <b>Entry Decision</b>
-Only tokens that satisfy entry conditions become candidates.
-
-5. 💰 <b>Execute</b>
-If automation is active and conditions pass, the engine can buy using your Max Buy and slippage rules.
-
-6. 👁️ <b>Monitor</b>
-Open positions are tracked against market data.
-
-7. 🚪 <b>Exit</b>
-Take-profit tiers, stop-loss, trailing, or time-stop rules determine exits.
-
-────────
-Scanner: <b>${scannerLabel}</b>
-Trading: <b>${tradingLabel}</b>
-Discovered: ${stats.discovered} · Evaluated: ${stats.evaluated} · Passed: ${stats.passed}
+Current scanner:
+${stats.running ? "LIVE" : "OFF"}
+Discovered ${stats.discovered} · Evaluated ${stats.evaluated}
 `.trim();
 }
 
 export function risksText(telegramId: number) {
   const s = getSettings(telegramId);
-
   return `
-⚠️ <b>TRADING RISKS</b>
+⚠️ <b>RISKS</b>
 
-Automated trading does not guarantee profit.
+• Automated trading can lose money.
+• Memecoins can be extremely volatile.
+• Slippage and execution failures are possible.
+• Daily loss limits reduce exposure but do not guarantee protection.
+• PUMP AUTO is not financial advice.
 
-Solana tokens can experience extreme volatility, low liquidity, failed transactions, slippage, smart-contract risks, and rapid price moves.
-
-PUMP AUTO can limit exposure using the rules you configure, but it cannot eliminate market risk.
-
-────────
-<b>Your current protections</b>
-• Daily loss cap: <b>${s.daily_loss_cap} SOL</b>
-• Max buy size: <b>${s.max_buy} SOL</b>
-• Slippage: <b>${s.slippage}%</b>
-• Stop-loss: <b>-${s.stop_loss}%</b>
-• Max trades: <b>${s.max_trades_hour}/hr · ${s.max_trades_day}/day</b>
+Your current risk controls:
+Daily loss cap: ${s.daily_loss_cap} SOL
+Stop loss: -${s.stop_loss}%
+Max trades: ${s.max_trades_hour}/hr · ${s.max_trades_day}/day
 `.trim();
 }
 
@@ -299,102 +252,143 @@ export function strategyText(telegramId: number) {
   const s = getSettings(telegramId);
   const tp = JSON.parse(s.tp_tiers);
   const tpText = tp
-    .map(
-      (tier: any) =>
-        `+${tier.profit}% → sell ${tier.sellPercent}%`
-    )
-    .join("\n");
-
+    .map((t: any) => `+${t.profit}% sell ${t.sellPercent}%`)
+    .join(", ");
   return `
-🤖 <b>CURRENT STRATEGY</b>
+🤖 <b>STRATEGY</b>
 
-<b>ENTRY</b>
-• Max buy: ${s.max_buy} SOL
-• Slippage: ${s.slippage}%
-• Smart Money Boost: ${s.smart_money_boost ? "ON" : "OFF"}
-• Max trades/hour: ${s.max_trades_hour}
-• Max trades/day: ${s.max_trades_day}
-
-<b>EXIT</b>
-• Take-profit:
-${tpText}
-• Stop-loss: -${s.stop_loss}%
-• Trailing after: +${s.trailing_after}%
-• Trailing pullback: ${s.trailing_pullback}%
-• Time stop: ${s.time_stop_minutes} min
-
-<b>RISK</b>
-• Daily loss cap: ${s.daily_loss_cap} SOL
-• Kill switch: ${s.kill_switch ? "ACTIVE" : "OFF"}
-
-On-chain filters (liquidity, holders, age, etc.) are applied by the scanner when it is active.
+Max buy: ${s.max_buy} SOL
+Slippage: ${s.slippage}%
+Take profit: ${tpText}
+Stop loss: -${s.stop_loss}%
+Trailing after: +${s.trailing_after}%
+Pullback: ${s.trailing_pullback}%
+Time stop: ${s.time_stop_minutes} min
+Smart money: ${s.smart_money_boost ? "ON" : "OFF"}
 `.trim();
 }
 
 export function securityText() {
   return `
-🔒 <b>WALLET SECURITY</b>
+🔒 <b>SECURITY</b>
 
-Private keys are encrypted before being stored in the local database.
+Wallet credentials are protected
+using secure encryption.
 
-• Keys are never written to logs.
-• A private key is shown only once at creation (or on explicit export after confirmation).
-• The encryption secret comes from the environment (WALLET_ENCRYPTION_KEY).
-• The bot can sign the trades you enable when automation is running.
-• There is no separate "withdraw all" feature beyond configured trading actions.
-
-If the host machine or encryption secret is compromised, funds can be lost. Use a dedicated low-balance wallet.
+Never send private keys or recovery
+phrases to support.
+Never share wallet secrets with anyone.
 `.trim();
 }
 
 export const FAQ_ANSWERS: Record<string, string> = {
-  "faq:1": `What does PUMP AUTO do? Manages wallet, scanner, filters, and auto rules. No guarantees.`,
-  "faq:2": `No profit guarantee. High risk.`,
-  "faq:3": `Buys only when auto is running, kill off, filters pass, limits allow.`,
-  "faq:4": `Rejected by filters (liquidity, holders, age, authority). See Decisions.`,
-  "faq:5": `Stop = no new activity. Emergency Kill = locks automation.`,
-  "faq:6": `Stop does not force-sell open positions.`,
-  "faq:7": `Only risk capital. Dedicated wallet. Limited by Max Buy.`,
-  "faq:8": `PnL and Positions show real stored data only.`,
-  "faq:9": `No separate withdraw. Host+encryption secret = key access risk.`,
-  "faq:10": `Failed txs are not success. Check balance, slippage, RPC.`
+  "1": "Auto-Hunter watches new Pump.fun launches, runs your filters, and only enters when checks pass.",
+  "2": "No. There is no profit guarantee. You can lose money.",
+  "3": "It buys only when a token passes your configured filters and risk limits.",
+  "4": "Open Decisions or Scanner for the real filter reasons.",
+  "5": "Yes. Use Stop Hunter or Emergency Stop. Existing positions are not auto-sold.",
+  "6": "Open positions stay open. Emergency Stop blocks new automated entries only.",
+  "7": "Use Max Buy and Daily Loss Cap in Settings. Start small.",
+  "8": "PnL and Positions show real trades once execution is recorded.",
+  "9": "Keys are encrypted locally. Never share them. The bot cannot withdraw to arbitrary addresses beyond trading.",
+  "10": "Check balance, slippage, RPC, and Activity. Failed txs do not create positions."
 };
 
 export function faqListText() {
-  return `❓ <b>FAQ</b>\n\nTap a question below.`.trim();
+  return `
+❓ <b>FAQ</b>
+
+Tap a question for a short answer.
+`.trim();
 }
 
 export function startExplainText(telegramId: number) {
   const s = getSettings(telegramId);
-  return `▶️ <b>START AUTO BOT</b>\n\nState: ${s.auto_state}\nKill: ${s.kill_switch ? "ON" : "OFF"}\nMax Buy: ${s.max_buy} SOL`.trim();
+  return `
+🤖 <b>START AUTO-HUNTER</b>
+
+Buy size: ${s.max_buy} SOL
+Stop loss: -${s.stop_loss}%
+Take profit: configured tiers
+Daily loss cap: ${s.daily_loss_cap} SOL
+
+The bot will automatically:
+• scan new tokens
+• apply your filters
+• evaluate signals
+• enter qualified trades
+• manage exits using your rules
+
+Automation can lose money.
+`.trim();
 }
 
 export function stopExplainText(telegramId: number) {
-  const s = getSettings(telegramId);
-  return `⏹ <b>STOP</b>\n\nCurrent: ${s.auto_state}`.trim();
+  void telegramId;
+  return `
+⏹ <b>STOP HUNTER</b>
+
+This pauses automated entries.
+Open positions are unchanged.
+`.trim();
 }
 
 export function killExplainText(telegramId: number) {
-  const s = getSettings(telegramId);
-  return `🆘 <b>EMERGENCY KILL</b>\n\nLocks automation. Does not force-sell.`.trim();
+  void telegramId;
+  return `
+🚨 <b>EMERGENCY STOP</b>
+
+This will immediately:
+• stop Auto-Hunter
+• block new automated entries
+• stop automated scanning/trading actions
+
+It will NOT:
+• sell existing positions
+• withdraw funds
+• delete your wallet
+
+Your existing positions remain unchanged.
+`.trim();
 }
 
 export function trendingText() {
-  return `🔥 <b>TRENDING</b>\n\nLive feed not connected yet. Check Status for scanner activity.`.trim();
+  return `
+🔥 <b>TRENDING</b>
+
+Live pump.fun stream is available
+via the external link.
+
+No mock trending list is shown here.
+`.trim();
 }
 
 export async function solPriceText(): Promise<string> {
   try {
     const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
+      "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=true"
     );
-    if (!res.ok) throw new Error(String(res.status));
-    const data = (await res.json()) as { solana?: { usd?: number } };
-    const price = data.solana?.usd;
-    if (typeof price !== "number") throw new Error("bad shape");
-    return `◎ <b>SOL PRICE</b>\n\n$${price.toFixed(2)} USD\n\nSource: CoinGecko`.trim();
+    if (!res.ok) throw new Error("price api");
+    const data: any = await res.json();
+    const price = data?.solana?.usd;
+    const change = data?.solana?.usd_24h_change;
+    if (typeof price !== "number") throw new Error("no price");
+    const arrow = typeof change === "number" && change >= 0 ? "▲" : "▼";
+    const ch =
+      typeof change === "number" ? `${arrow} ${Math.abs(change).toFixed(2)}%` : "";
+    return `
+◎ <b>SOL PRICE</b>
+
+$${price.toFixed(2)} ${ch}
+
+Source: CoinGecko (live)
+`.trim();
   } catch {
-    return `◎ <b>SOL PRICE</b>\n\nPrice unavailable. Try again.`.trim();
+    return `
+◎ <b>SOL PRICE</b>
+
+Price temporarily unavailable.
+`.trim();
   }
 }
 
@@ -402,92 +396,167 @@ export function referralText(
   telegramId: number,
   botUsername: string | null
 ) {
-  const info = getReferralStats(telegramId);
-  if (!info) {
-    return `🎁 <b>REFERRAL</b>\n\nNot available yet.`.trim();
-  }
+  const stats = getReferralStats(telegramId);
+  const code = stats?.code ?? `ref_${telegramId}`;
   const link = botUsername
-    ? `https://t.me/${botUsername}?start=ref_${info.code}`
-    : info.code;
-  return `🎁 <b>REFERRAL</b>\n\nCode: <code>${info.code}</code>\nLink: <code>${link}</code>\nReferred: <b>${info.referredCount}</b>\nEarned: <b>${info.totalEarnedSol} SOL</b>`.trim();
-}
-
-export async function portfolioText(
-  telegramId: number
-): Promise<string> {
-  const address = getAddress(telegramId);
-
-  let balance = "unavailable";
-  if (address) {
-    try {
-      balance = `${(await getBalance(telegramId)).toFixed(4)} SOL`;
-    } catch {
-      balance = "unavailable";
-    }
-  }
+    ? `https://t.me/${botUsername}?start=ref_${code}`
+    : code;
 
   return `
-📊 <b>PORTFOLIO</b>
+🎁 <b>REFERRAL</b>
 
-Wallet:
-<code>${address ?? "not connected"}</code>
-Balance: ${balance}
+Referrals: ${stats?.referredCount ?? 0}
+Rewards: ${stats?.totalEarnedSol ?? 0} SOL
 
-Open positions: <b>0</b>
-Unrealized PnL: <b>0 SOL</b>
+Your referral link:
+<code>${link}</code>
+`.trim();
+}
 
-No open positions — auto-trading entry is not active yet.
+export async function portfolioText(telegramId: number): Promise<string> {
+  const address = getAddress(telegramId);
+  let bal = "unavailable";
+  if (address) {
+    try {
+      bal = `${(await getBalance(telegramId)).toFixed(4)} SOL`;
+    } catch {
+      bal = "unavailable";
+    }
+  }
+  return `
+👛 <b>WALLET</b>
+ACTIVE WALLET
+${address ? `<code>${address}</code>` : "not connected"}
+${bal}
 `.trim();
 }
 
 export function ordersText(): string {
-  return `
-📋 <b>RECENT ORDERS</b>
-
-No trades executed yet.
-
-This will show real trade history once the auto-trading engine is active.
-`.trim();
+  return `📜 No open orders.`;
 }
 
 export function walletsListText(
-  wallets: { label: string; is_active: number }[]
+  wallets: { id: number; label: string; is_active: number }[]
 ) {
-  if (wallets.length === 0) {
-    return `🗂 <b>MY WALLETS</b>\n\nNo wallets yet.`.trim();
-  }
-  const lines = wallets
-    .map((w) => `${w.is_active ? "✅" : "▫️"} ${w.label}`)
+  if (!wallets.length) return `No wallets yet.`;
+  return wallets
+    .map((w) => `${w.is_active ? "✅" : "○"} ${w.label}`)
     .join("\n");
-  return `🗂 <b>MY WALLETS</b>\n\n${lines}`.trim();
 }
 
 export function decisionsText(): string {
-  const rows = getRecentTokens(12) as any[];
+  const tokens = getRecentTokens(12);
+  if (!tokens.length) {
+    return `
+🧠 <b>DECISIONS</b>
 
-  if (!rows || rows.length === 0) {
-    return `🧠 <b>DECISIONS</b>\n\nNo tokens evaluated yet.\n\nWhen the scanner is active, every pass or skip is recorded here with the real filter reasons.\n\nNo mock data.`;
+No tokens evaluated yet.
+
+When the scanner is active, every pass
+or skip is recorded here with the real
+filter reasons.
+
+No mock data.
+`.trim();
   }
 
-  const lines = rows.map((row: any) => {
-    const sym = row.symbol
-      ? `$${row.symbol}`
-      : String(row.mint || "").slice(0, 6) + "…";
-    const passed = Number(row.passed) === 1;
-    const mark = passed ? "🟢 PASS" : "🔴 SKIP";
-    let reasons: string[] = [];
-    try {
-      reasons = JSON.parse(row.rejection_reasons || "[]");
-    } catch {
-      reasons = [];
-    }
-    const why = passed
-      ? "filters cleared"
-      : reasons.length
-        ? reasons.slice(0, 3).join("; ")
-        : "no reason stored";
-    return `${mark} <b>${sym}</b>\n   ${why}`;
+  const lines = tokens.map((t: any) => {
+    const tag = t.passed ? "✅ PASS" : "⏭ SKIP";
+    const sym = t.symbol || t.mint?.slice(0, 6) || "?";
+    const reasons =
+      Array.isArray(t.rejectionReasons) && t.rejectionReasons.length
+        ? t.rejectionReasons.slice(0, 2).join("; ")
+        : t.passed
+          ? "passed filters"
+          : "no reason stored";
+    return `${tag} $${sym}\n${reasons}`;
   });
 
-  return `🧠 <b>DECISIONS</b>\n\nLast ${rows.length} evaluations (newest first):\n\n${lines.join("\n\n")}\n\nWhy this exists: so you always know what the bot decided and why.`;
+  return `
+🧠 <b>DECISIONS</b>
+
+${lines.join("\n\n")}
+`.trim();
+}
+
+export function scannerText(): string {
+  const stats = scanner.getStats();
+  const tokens = getRecentTokens(8);
+  const passed = tokens.filter((t: any) => t.passed).slice(0, 5);
+
+  let qualifiedBlock = "No qualified tokens yet.";
+  if (passed.length) {
+    qualifiedBlock = passed
+      .map((t: any) => {
+        const sym = t.symbol || t.mint?.slice(0, 6);
+        return `$${sym}\n${t.mint}`;
+      })
+      .join("\n\n");
+  }
+
+  return `
+🔎 <b>SCANNER</b>
+${stats.running ? "● LIVE" : "● OFF"}
+Watching new Solana launches.
+━━━━━━━━━━━━━━━━━━━━
+Discovered ${stats.discovered} · Evaluated ${stats.evaluated}
+Passed ${stats.passed} · Rejected ${stats.rejected}
+━━━━━━━━━━━━━━━━━━━━
+🔥 <b>QUALIFIED</b>
+${qualifiedBlock}
+`.trim();
+}
+
+export function activityText(): string {
+  const stats = scanner.getStats();
+  const tokens = getRecentTokens(10);
+
+  if (!tokens.length) {
+    return `
+📡 <b>ACTIVITY</b>
+${stats.running ? "● LIVE" : "● IDLE"}
+
+No activity yet.
+Once the scanner evaluates tokens,
+events will appear here in real time.
+`.trim();
+  }
+
+  const lines = tokens.map((t: any) => {
+    const sym = t.symbol || t.mint?.slice(0, 6) || "?";
+    const tag = t.passed ? "✓ qualified" : "⏭ skipped";
+    return `🔎 $${sym} ${tag}`;
+  });
+
+  return `
+📡 <b>ACTIVITY</b>
+${stats.running ? "● LIVE" : "● IDLE"}
+
+${lines.join("\n")}
+`.trim();
+}
+
+export function buyPromptText(): string {
+  return `
+⚡ <b>BUY TOKEN</b>
+
+Send the Solana token contract
+address to analyze it.
+
+Manual buy execution uses your
+connected wallet and settings.
+
+Trading is risky.
+`.trim();
+}
+
+export function sellMenuText(): string {
+  return `
+📉 <b>SELL</b>
+
+No open positions to sell.
+
+Positions will appear here after
+a real fill is recorded.
+`.trim();
 }
