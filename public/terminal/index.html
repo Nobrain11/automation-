@@ -3,82 +3,100 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PUMP AUTO — Terminal</title>
+  <title>PUMP AUTO — Pulse Terminal</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <div id="gate" class="gate hidden">
+  <div id="gate" class="gate">
     <div class="card">
-      <h1>⚡ PUMP AUTO</h1>
-      <p>Open this terminal from the Telegram bot using <b>Web Terminal</b>. Login links expire in 10 minutes.</p>
-      <p class="muted">No mock data. Same wallet &amp; settings as Telegram. Keys never shown here.</p>
+      <div class="logo">⚡ PUMP AUTO</div>
+      <p>Open from Telegram → <b>WEB TERMINAL</b>.</p>
+      <p class="muted">Login link expires in 10 minutes. Real scanner data only.</p>
     </div>
   </div>
 
   <div id="app" class="hidden">
-    <header class="top">
-      <div class="brand">⚡ PUMP AUTO <span>TERMINAL</span></div>
+    <header class="topbar">
+      <div class="brand">
+        <span class="mark">⚡</span>
+        <span>PUMP AUTO</span>
+        <span class="pill" id="scanPill">SCANNER</span>
+      </div>
+      <div class="top-metrics">
+        <div class="metric" id="solMetric">SOL —</div>
+        <div class="metric" id="balMetric">Bal —</div>
+        <div class="metric" id="huntMetric">Hunter —</div>
+      </div>
       <div class="top-actions">
         <button id="btnRefresh" class="ghost">Refresh</button>
         <button id="btnLogout" class="ghost">Logout</button>
       </div>
     </header>
 
-    <main class="grid">
-      <section class="panel">
-        <h2>WALLET</h2>
-        <div id="walletBox" class="mono">—</div>
-      </section>
+    <div class="shell">
+      <aside class="rail">
+        <div class="rail-title">TRADE</div>
+        <label class="field">Buy size (SOL)
+          <input id="inMaxBuy" type="number" step="0.01" min="0.01" />
+        </label>
+        <label class="field">Slippage %
+          <input id="inSlip" type="number" step="1" min="1" />
+        </label>
+        <label class="field">Stop loss %
+          <input id="inSl" type="number" step="1" />
+        </label>
+        <label class="field">Daily cap (SOL)
+          <input id="inCap" type="number" step="0.05" min="0" />
+        </label>
+        <button id="btnSaveSettings" class="primary block">Save</button>
 
-      <section class="panel">
-        <h2>AUTO-HUNTER</h2>
-        <div id="hunterBox" class="mono">—</div>
-        <div class="row">
-          <button id="btnStart" class="primary">Start Hunting</button>
-          <button id="btnStop" class="warn">Stop</button>
-          <button id="btnKill" class="danger">Emergency Stop</button>
-          <button id="btnClearKill" class="ghost hidden">Clear Kill</button>
+        <div class="rail-title mt">AUTO-HUNTER</div>
+        <div id="hunterState" class="mono small">—</div>
+        <button id="btnStart" class="primary block">Start Hunting</button>
+        <button id="btnStop" class="warn block">Stop</button>
+        <button id="btnKill" class="danger block">Emergency Stop</button>
+        <button id="btnClearKill" class="ghost block hidden">Clear Kill</button>
+
+        <div class="rail-title mt">STATS</div>
+        <div id="statsBox" class="mono small">—</div>
+
+        <div class="rail-title mt">POSITIONS</div>
+        <div id="posBox" class="mono small">No open positions</div>
+      </aside>
+
+      <main class="pulse">
+        <div class="pulse-head">
+          <h1>PULSE</h1>
+          <span class="muted" id="pulseMeta">Live pump.fun discoveries</span>
         </div>
-      </section>
 
-      <section class="panel">
-        <h2>SCANNER</h2>
-        <div id="scannerBox" class="mono">—</div>
-      </section>
+        <div class="cols">
+          <section class="col">
+            <header class="col-h">
+              <span class="dot new"></span> NEW PAIRS
+              <span class="count" id="cntNew">0</span>
+            </header>
+            <div id="colNew" class="col-body"></div>
+          </section>
 
-      <section class="panel">
-        <h2>SETTINGS</h2>
-        <div id="settingsBox" class="mono">—</div>
-        <div class="edit-grid">
-          <label>Max buy (SOL)<input id="inMaxBuy" type="number" step="0.01" min="0.01" /></label>
-          <label>Slippage %<input id="inSlip" type="number" step="1" min="1" /></label>
-          <label>Stop loss %<input id="inSl" type="number" step="1" /></label>
-          <label>Daily cap (SOL)<input id="inCap" type="number" step="0.05" min="0" /></label>
+          <section class="col">
+            <header class="col-h">
+              <span class="dot pass"></span> PASSED FILTERS
+              <span class="count" id="cntPass">0</span>
+            </header>
+            <div id="colPass" class="col-body"></div>
+          </section>
+
+          <section class="col">
+            <header class="col-h">
+              <span class="dot skip"></span> REJECTED
+              <span class="count" id="cntSkip">0</span>
+            </header>
+            <div id="colSkip" class="col-body"></div>
+          </section>
         </div>
-        <div class="row">
-          <button id="btnSaveSettings" class="primary">Save settings</button>
-        </div>
-      </section>
-
-      <section class="panel wide">
-        <h2>ACTIVITY / DECISIONS</h2>
-        <div id="activityBox" class="mono feed">—</div>
-      </section>
-
-      <section class="panel">
-        <h2>POSITIONS</h2>
-        <div id="posBox" class="mono">No open positions</div>
-      </section>
-
-      <section class="panel">
-        <h2>PNL</h2>
-        <div id="pnlBox" class="mono">No completed trades yet</div>
-      </section>
-    </main>
-
-    <footer class="foot">
-      Real data only · Keys never shown in web UI · Manage keys in Telegram
-    </footer>
+      </main>
+    </div>
   </div>
 
   <script src="/app.js"></script>

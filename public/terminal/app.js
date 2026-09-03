@@ -21,102 +21,139 @@ function showApp() {
   document.getElementById("app").classList.remove("hidden");
 }
 
-function shortAddr(a) {
+function short(a) {
   if (!a || a.length < 10) return a || "—";
-  return a.slice(0, 4) + "..." + a.slice(-4);
+  return a.slice(0, 4) + "…" + a.slice(-4);
 }
 
-function hunterLabel(state) {
-  if (state === "hunting") return "● HUNTING";
-  if (state === "paused") return "● PAUSED";
-  if (state === "stopped_kill") return "● STOPPED (KILL)";
-  return "● READY";
+function ageLabel(sec) {
+  if (sec == null) return "—";
+  if (sec < 60) return sec + "s";
+  if (sec < 3600) return Math.floor(sec / 60) + "m";
+  return Math.floor(sec / 3600) + "h";
+}
+
+function fmtNum(n, d = 2) {
+  if (n == null || Number.isNaN(Number(n))) return "—";
+  return Number(n).toFixed(d);
+}
+
+function tokenCard(t) {
+  const liq = fmtNum(t.liquiditySol, 3);
+  const top = t.top10 != null ? fmtNum(t.top10, 1) + "%" : "—";
+  const mintOk = t.mintRevoked ? "<span class=\"ok\">mint✓</span>" : "<span class=\"bad\">mint✗</span>";
+  const frzOk = t.freezeRevoked ? "<span class=\"ok\">frz✓</span>" : "<span class=\"bad\">frz✗</span>";
+  const reasons =
+    t.reasons && t.reasons.length
+      ? `<div class="reasons">${t.reasons.slice(0, 2).join(" · ")}</div>`
+      : "";
+  return `
+    <div class="token">
+      <div class="token-top">
+        <div class="sym">$${t.symbol || "???"}<span>${t.name || ""}</span></div>
+        <div class="age">${ageLabel(t.ageSeconds)}</div>
+      </div>
+      <div class="metrics">
+        <div>liq <b>${liq}</b> SOL</div>
+        <div>top10 <b>${top}</b></div>
+        <div>${mintOk}</div>
+        <div>${frzOk}</div>
+      </div>
+      ${reasons}
+      <div class="mint">${short(t.mint)}</div>
+    </div>`;
+}
+
+function fillCol(el, list, emptyMsg) {
+  if (!list.length) {
+    el.innerHTML = `<div class="empty">${emptyMsg}</div>`;
+    return;
+  }
+  el.innerHTML = list.map(tokenCard).join("");
 }
 
 async function loadDashboard() {
   const d = await api("/api/dashboard");
+
+  const sol =
+    d.sol && d.sol.price != null
+      ? `SOL <strong>$${d.sol.price.toFixed(2)}</strong>` +
+        (d.sol.change24h != null
+          ? ` ${d.sol.change24h >= 0 ? "▲" : "▼"}${Math.abs(d.sol.change24h).toFixed(1)}%`
+          : "")
+      : "SOL <strong>—</strong>";
+  document.getElementById("solMetric").innerHTML = sol;
+
   const bal =
     d.wallet.balanceSol == null
-      ? "unavailable"
-      : d.wallet.balanceSol.toFixed(4) + " SOL";
-  const usd =
-    d.wallet.balanceUsd != null ? ` · $${d.wallet.balanceUsd}` : "";
-  const solLine =
-    d.sol && d.sol.price != null
-      ? `SOL $${d.sol.price.toFixed(2)}` +
-        (d.sol.change24h != null
-          ? ` ${d.sol.change24h >= 0 ? "▲" : "▼"} ${Math.abs(d.sol.change24h).toFixed(2)}%`
-          : "")
-      : "SOL price unavailable";
+      ? "Bal <strong>—</strong>"
+      : `Bal <strong>${d.wallet.balanceSol.toFixed(4)}</strong>` +
+        (d.wallet.balanceUsd != null ? ` ($${d.wallet.balanceUsd})` : "");
+  document.getElementById("balMetric").innerHTML = bal;
 
-  document.getElementById("walletBox").textContent =
-    (d.wallet.connected ? "CONNECTED\n" : "NOT CONNECTED\n") +
-    shortAddr(d.wallet.address) +
-    "\n" +
-    bal +
-    usd +
-    "\n" +
-    solLine;
+  const hs =
+    d.hunter.state === "hunting"
+      ? "● HUNTING"
+      : d.hunter.state === "stopped_kill"
+        ? "● KILL"
+        : "● READY";
+  document.getElementById("huntMetric").textContent = hs;
+  document.getElementById("hunterState").textContent =
+    hs + (d.hunter.killSwitch ? "\nKill switch ON" : "");
 
-  document.getElementById("hunterBox").textContent =
-    hunterLabel(d.hunter.state) +
-    (d.hunter.killSwitch ? "\nKill switch: ON" : "");
+  document.getElementById("scanPill").classList.toggle("on", d.scanner.running);
+  document.getElementById("scanPill").textContent = d.scanner.running
+    ? "LIVE"
+    : "OFF";
 
-  const clearBtn = document.getElementById("btnClearKill");
-  if (clearBtn) {
-    clearBtn.classList.toggle("hidden", !d.hunter.killSwitch);
-  }
+  document.getElementById("statsBox").textContent =
+    `Disc  ${d.scanner.discovered}\n` +
+    `Eval  ${d.scanner.evaluated}\n` +
+    `Pass  ${d.scanner.passed}\n` +
+    `Skip  ${d.scanner.rejected}`;
 
-  document.getElementById("scannerBox").textContent =
-    (d.scanner.running ? "● LIVE" : "● OFF") +
-    `\nDiscovered  ${d.scanner.discovered}` +
-    `\nEvaluated   ${d.scanner.evaluated}` +
-    `\nPassed      ${d.scanner.passed}` +
-    `\nRejected    ${d.scanner.rejected}`;
+  document.getElementById("posBox").textContent =
+    d.positions.length === 0 ? "No open positions" : JSON.stringify(d.positions);
 
-  const s = d.settings;
-  document.getElementById("settingsBox").textContent =
-    `Max buy     ${s.maxBuy} SOL\n` +
-    `Slippage    ${s.slippage}%\n` +
-    `Stop loss   ${s.stopLoss}%\n` +
-    `Trail after +${s.trailingAfter}%\n` +
-    `Daily cap   ${s.dailyLossCap} SOL\n` +
-    `Smart $     ${s.smartMoneyBoost ? "ON" : "OFF"}`;
-
-  // fill quick-edit inputs if present
   const setVal = (id, v) => {
     const el = document.getElementById(id);
     if (el && document.activeElement !== el) el.value = v;
   };
-  setVal("inMaxBuy", s.maxBuy);
-  setVal("inSlip", s.slippage);
-  setVal("inSl", s.stopLoss);
-  setVal("inCap", s.dailyLossCap);
+  setVal("inMaxBuy", d.settings.maxBuy);
+  setVal("inSlip", d.settings.slippage);
+  setVal("inSl", d.settings.stopLoss);
+  setVal("inCap", d.settings.dailyLossCap);
 
-  document.getElementById("posBox").textContent =
-    d.positions.length === 0
-      ? "No open positions"
-      : JSON.stringify(d.positions, null, 2);
-
-  document.getElementById("pnlBox").textContent = d.pnl.note || "No data";
+  document
+    .getElementById("btnClearKill")
+    .classList.toggle("hidden", !d.hunter.killSwitch);
 }
 
-async function loadActivity() {
-  const a = await api("/api/activity");
-  if (!a.items.length) {
-    document.getElementById("activityBox").textContent =
-      (a.scannerRunning ? "● LIVE\n\n" : "● IDLE\n\n") +
-      "No evaluated tokens yet.";
-    return;
-  }
-  const lines = a.items.map((t) => {
-    const tag = t.passed ? "PASS" : "SKIP";
-    const sym = t.symbol || (t.mint || "").slice(0, 6);
-    const why =
-      t.reasons && t.reasons.length ? t.reasons.slice(0, 2).join("; ") : "";
-    return `${tag} $${sym}${why ? " — " + why : ""}`;
-  });
-  document.getElementById("activityBox").textContent = lines.join("\n");
+async function loadPulse() {
+  const p = await api("/api/pulse");
+  document.getElementById("cntNew").textContent = String(p.newPairs.length);
+  document.getElementById("cntPass").textContent = String(p.passed.length);
+  document.getElementById("cntSkip").textContent = String(p.rejected.length);
+
+  document.getElementById("pulseMeta").textContent = p.scannerRunning
+    ? "Scanner LIVE · real pump.fun creates"
+    : "Scanner idle · showing last saved tokens";
+
+  fillCol(
+    document.getElementById("colNew"),
+    p.newPairs,
+    "No tokens discovered yet"
+  );
+  fillCol(
+    document.getElementById("colPass"),
+    p.passed,
+    "No tokens passed filters"
+  );
+  fillCol(
+    document.getElementById("colSkip"),
+    p.rejected,
+    "No rejections yet"
+  );
 }
 
 async function boot() {
@@ -124,68 +161,57 @@ async function boot() {
     await api("/api/me");
     showApp();
     await loadDashboard();
-    await loadActivity();
+    await loadPulse();
   } catch {
     showGate();
   }
 }
 
-document.getElementById("btnRefresh").addEventListener("click", async () => {
+document.getElementById("btnRefresh").onclick = async () => {
   await loadDashboard();
-  await loadActivity();
-});
-
-document.getElementById("btnLogout").addEventListener("click", async () => {
+  await loadPulse();
+};
+document.getElementById("btnLogout").onclick = async () => {
   await api("/api/logout", { method: "POST" });
   showGate();
-});
-
-document.getElementById("btnStart").addEventListener("click", async () => {
+};
+document.getElementById("btnStart").onclick = async () => {
   const r = await api("/api/hunter/start", { method: "POST" });
   if (!r.ok) alert(r.error || "Could not start");
   await loadDashboard();
-});
-
-document.getElementById("btnStop").addEventListener("click", async () => {
+};
+document.getElementById("btnStop").onclick = async () => {
   await api("/api/hunter/stop", { method: "POST" });
   await loadDashboard();
-});
-
-document.getElementById("btnKill").addEventListener("click", async () => {
-  if (!confirm("Emergency stop blocks new automated entries. Positions are not sold.")) return;
+};
+document.getElementById("btnKill").onclick = async () => {
+  if (!confirm("Emergency stop blocks new auto entries. Does not sell positions."))
+    return;
   await api("/api/hunter/kill", { method: "POST" });
   await loadDashboard();
-});
-
-const clearKillBtn = document.getElementById("btnClearKill");
-if (clearKillBtn) {
-  clearKillBtn.addEventListener("click", async () => {
-    await api("/api/hunter/clear-kill", { method: "POST" });
-    await loadDashboard();
+};
+document.getElementById("btnClearKill").onclick = async () => {
+  await api("/api/hunter/clear-kill", { method: "POST" });
+  await loadDashboard();
+};
+document.getElementById("btnSaveSettings").onclick = async () => {
+  const body = {
+    max_buy: Number(document.getElementById("inMaxBuy").value),
+    slippage: Number(document.getElementById("inSlip").value),
+    stop_loss: Number(document.getElementById("inSl").value),
+    daily_loss_cap: Number(document.getElementById("inCap").value)
+  };
+  const r = await api("/api/settings", {
+    method: "POST",
+    body: JSON.stringify(body)
   });
-}
-
-const saveBtn = document.getElementById("btnSaveSettings");
-if (saveBtn) {
-  saveBtn.addEventListener("click", async () => {
-    const body = {
-      max_buy: Number(document.getElementById("inMaxBuy").value),
-      slippage: Number(document.getElementById("inSlip").value),
-      stop_loss: Number(document.getElementById("inSl").value),
-      daily_loss_cap: Number(document.getElementById("inCap").value)
-    };
-    const r = await api("/api/settings", {
-      method: "POST",
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) alert(r.error || "Save failed");
-    await loadDashboard();
-  });
-}
+  if (!r.ok) alert(r.error || "Save failed");
+  await loadDashboard();
+};
 
 boot();
 setInterval(() => {
   if (document.getElementById("app").classList.contains("hidden")) return;
   loadDashboard().catch(() => {});
-  loadActivity().catch(() => {});
-}, 8000);
+  loadPulse().catch(() => {});
+}, 5000);
