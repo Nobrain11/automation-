@@ -8,9 +8,11 @@ import { buyToken, sellPosition } from "../services/trade.js";
 import {
   enrichMints,
   fetchBoostedSolana,
+  fetchPumpMovers,
   sortByChange,
   sortByLiquidity,
   sortByMomentum,
+  sortByScore,
   sortByVolume,
   MarketToken
 } from "../services/market.js";
@@ -167,10 +169,7 @@ async function fetchSolPrice(): Promise<{
 export function buildActivity(limit = 40) {
   const stats = scanner.getStats();
   const tokens = getRecentTokens(limit).map(mapToken);
-  return {
-    scannerRunning: stats.running,
-    items: tokens
-  };
+  return { scannerRunning: stats.running, items: tokens };
 }
 
 export function buildPulse(limit = 30) {
@@ -191,22 +190,34 @@ export function buildPulse(limit = 30) {
 function mergeMarket(scannerRow: any, m: MarketToken | undefined) {
   return {
     ...scannerRow,
+    imageUrl: m?.imageUrl ?? null,
+    description: m?.description ?? null,
     priceUsd: m?.priceUsd ?? null,
     priceChange24h: m?.priceChange24h ?? null,
     priceChange5m: m?.priceChange5m ?? null,
     priceChange1h: m?.priceChange1h ?? null,
     liquidityUsd: m?.liquidityUsd ?? null,
     volume24h: m?.volume24h ?? null,
+    volume1h: m?.volume1h ?? null,
     marketCap: m?.marketCap ?? null,
     fdv: m?.fdv ?? null,
     pairUrl: m?.pairUrl ?? null,
     dexId: m?.dexId ?? null,
+    isPump: m?.isPump ?? false,
+    website: m?.website ?? null,
+    twitter: m?.twitter ?? null,
+    telegram: m?.telegram ?? null,
+    review: m?.review ?? null,
     marketOnline: Boolean(m && m.priceUsd != null)
   };
 }
 
 export async function buildTrending() {
-  const boosted = await fetchBoostedSolana();
+  const [movers, boosted] = await Promise.all([
+    fetchPumpMovers(),
+    fetchBoostedSolana()
+  ]);
+
   const recent = getRecentTokens(40).map(mapToken);
   const scanMints = recent.map((t) => t.mint).filter(Boolean);
   const enrichedScan = await enrichMints(scanMints);
@@ -217,20 +228,35 @@ export async function buildTrending() {
     .filter((t) => t.passed)
     .map((t) => mergeMarket(t, byMint.get(t.mint)));
 
-  const marketPool = boosted.tokens.length
-    ? boosted.tokens
-    : enrichedScan;
+  // Merge movers + boosted, prefer higher volume
+  const poolMap = new Map<string, MarketToken>();
+  for (const t of [...movers.tokens, ...boosted.tokens]) {
+    const prev = poolMap.get(t.mint);
+    if (!prev || (t.volume24h || 0) > (prev.volume24h || 0)) {
+      poolMap.set(t.mint, t);
+    }
+  }
+  const marketPool = [...poolMap.values()];
+  const pumpOnly = marketPool.filter((t) => t.isPump);
+
+  const online = movers.online || boosted.online || enrichedScan.length > 0;
 
   return {
-    online: boosted.online || enrichedScan.length > 0,
-    error: boosted.online ? null : boosted.error || null,
-    trending: sortByVolume(marketPool).slice(0, 25),
+    online,
+    error: online ? null : movers.error || boosted.error || null,
+    trending: sortByVolume(marketPool).slice(0, 30),
+    movers: sortByVolume(pumpOnly.length ? pumpOnly : marketPool).slice(0, 30),
     momentum: sortByMomentum(marketPool).slice(0, 25),
     gainers: sortByChange(marketPool).slice(0, 25),
     liquidity: sortByLiquidity(marketPool).slice(0, 25),
+    scored: sortByScore(marketPool).slice(0, 25),
     newPairs,
     passed,
-    source: boosted.online ? "dexscreener+scanner" : "scanner-only"
+    source: movers.online
+      ? "dexscreener-pump-movers"
+      : boosted.online
+        ? "dexscreener-boosted"
+        : "scanner-only"
   };
 }
 
@@ -264,10 +290,7 @@ export function startHunter(telegramId: number): { ok: boolean; error?: string }
   }
   const s = getSettings(telegramId);
   if (s.kill_switch) {
-    return {
-      ok: false,
-      error: "Emergency stop is active. Use Clear Kill."
-    };
+    return { ok: false, error: "Emergency stop is active. Use Clear Kill." };
   }
   updateSettings(telegramId, { auto_state: "running" });
   return { ok: true };
