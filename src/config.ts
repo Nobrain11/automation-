@@ -8,6 +8,19 @@ function required(name: string): string {
   return value;
 }
 
+/** On Railway, default to /data so a mounted volume keeps wallets across deploys. */
+function defaultDatabasePath(): string {
+  if (process.env.DATABASE_PATH?.trim()) {
+    return process.env.DATABASE_PATH.trim();
+  }
+  const onRailway = Boolean(
+    process.env.RAILWAY_ENVIRONMENT ||
+      process.env.RAILWAY_PROJECT_ID ||
+      process.env.RAILWAY_SERVICE_ID
+  );
+  return onRailway ? "/data/bot.sqlite" : "./data/bot.sqlite";
+}
+
 export const config = {
   botToken: required("BOT_TOKEN"),
 
@@ -17,9 +30,7 @@ export const config = {
 
   walletEncryptionKey: required("WALLET_ENCRYPTION_KEY"),
 
-  databasePath:
-    process.env.DATABASE_PATH?.trim() ||
-    "./data/bot.sqlite",
+  databasePath: defaultDatabasePath(),
 
   logLevel: process.env.LOG_LEVEL?.trim() || "info",
 

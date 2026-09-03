@@ -6,6 +6,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
+# Persistent data dir (Railway volume should mount here)
+RUN mkdir -p /data
+
 COPY package.json package-lock.json* ./
 RUN npm install
 
@@ -20,6 +23,7 @@ RUN npm run build \
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV DATABASE_PATH=/data/bot.sqlite
 
 EXPOSE 3000
 
