@@ -5,6 +5,15 @@ import { getRecentTokens, getScannerCounts } from "../db/scanner-repository.js";
 import { listOpenPositions } from "../db/positions.js";
 import { getAddress, getBalance, hasWallet } from "../services/wallet.js";
 import { buyToken, sellPosition } from "../services/trade.js";
+import {
+  enrichMints,
+  fetchBoostedSolana,
+  sortByChange,
+  sortByLiquidity,
+  sortByMomentum,
+  sortByVolume,
+  MarketToken
+} from "../services/market.js";
 import { updateSetting } from "../services/settings.js";
 import { scanner } from "../scanner/scanner-instance.js";
 
@@ -165,6 +174,53 @@ export function buildPulse(limit = 30) {
     newPairs,
     passed,
     rejected
+  };
+}
+
+function mergeMarket(scannerRow: any, m: MarketToken | undefined) {
+  return {
+    ...scannerRow,
+    priceUsd: m?.priceUsd ?? null,
+    priceChange24h: m?.priceChange24h ?? null,
+    priceChange5m: m?.priceChange5m ?? null,
+    priceChange1h: m?.priceChange1h ?? null,
+    liquidityUsd: m?.liquidityUsd ?? null,
+    volume24h: m?.volume24h ?? null,
+    marketCap: m?.marketCap ?? null,
+    fdv: m?.fdv ?? null,
+    pairUrl: m?.pairUrl ?? null,
+    dexId: m?.dexId ?? null,
+    marketOnline: Boolean(m && m.priceUsd != null)
+  };
+}
+
+/** Full trending workspace: boosted + scanner enriched */
+export async function buildTrending() {
+  const boosted = await fetchBoostedSolana();
+  const recent = getRecentTokens(40).map(mapToken);
+  const scanMints = recent.map((t) => t.mint).filter(Boolean);
+  const enrichedScan = await enrichMints(scanMints);
+  const byMint = new Map(enrichedScan.map((t) => [t.mint, t]));
+
+  const newPairs = recent.map((t) => mergeMarket(t, byMint.get(t.mint)));
+  const passed = recent
+    .filter((t) => t.passed)
+    .map((t) => mergeMarket(t, byMint.get(t.mint)));
+
+  const marketPool = boosted.tokens.length
+    ? boosted.tokens
+    : enrichedScan;
+
+  return {
+    online: boosted.online || enrichedScan.length > 0,
+    error: boosted.online ? null : boosted.error || null,
+    trending: sortByVolume(marketPool).slice(0, 25),
+    momentum: sortByMomentum(marketPool).slice(0, 25),
+    gainers: sortByChange(marketPool).slice(0, 25),
+    liquidity: sortByLiquidity(marketPool).slice(0, 25),
+    newPairs,
+    passed,
+    source: boosted.online ? "dexscreener+scanner" : "scanner-only"
   };
 }
 

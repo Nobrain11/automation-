@@ -17,6 +17,7 @@ import {
   buildActivity,
   buildDashboard,
   buildPulse,
+  buildTrending,
   clearKill,
   emergencyStop,
   executeBuy,
@@ -157,6 +158,13 @@ export function startWebServer(): void {
         const id = requireAuth(req, res);
         if (!id) return;
         sendJson(res, 200, buildPulse(30));
+        return;
+      }
+
+      if (path === "/api/trending" && req.method === "GET") {
+        const id = requireAuth(req, res);
+        if (!id) return;
+        sendJson(res, 200, await buildTrending());
         return;
       }
 
