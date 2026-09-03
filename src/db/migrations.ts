@@ -1,4 +1,4 @@
-// src/db/migrations.ts — includes web_sessions for terminal auth
+// src/db/migrations.ts
 
 import { db } from "./sqlite.js";
 
@@ -103,6 +103,35 @@ export function runMigrations(): void {
 
     CREATE INDEX IF NOT EXISTS idx_web_sessions_telegram ON web_sessions(telegram_id);
     CREATE INDEX IF NOT EXISTS idx_web_sessions_expires ON web_sessions(expires_at);
+
+    CREATE TABLE IF NOT EXISTS positions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_id INTEGER NOT NULL,
+      mint TEXT NOT NULL,
+      symbol TEXT,
+      entry_sol REAL NOT NULL,
+      entry_signature TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at INTEGER NOT NULL,
+      closed_at INTEGER,
+      exit_sol REAL,
+      exit_signature TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_positions_user ON positions(telegram_id);
+    CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
+
+    CREATE TABLE IF NOT EXISTS trades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_id INTEGER NOT NULL,
+      mint TEXT NOT NULL,
+      side TEXT NOT NULL,
+      amount_sol REAL NOT NULL,
+      signature TEXT,
+      status TEXT NOT NULL,
+      error TEXT,
+      created_at INTEGER NOT NULL
+    );
   `);
 
   addColumnIfMissing("users", "username", "TEXT");
