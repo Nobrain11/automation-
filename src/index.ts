@@ -1,4 +1,4 @@
-// src/index.ts — web first; scanner + hunter + monitor + bot
+// src/index.ts — start web first; never die on optional systems
 
 import { bot } from "./bot/bot.js";
 import { config, validateConfig } from "./config.js";
@@ -17,10 +17,9 @@ async function main() {
   validateConfig();
 
   try {
-    const rpcHost = new URL(config.rpcUrl).host;
-    logger.info(`Using Solana RPC host: ${rpcHost}`);
+    logger.info(`Using Solana RPC host: ${new URL(config.rpcUrl).host}`);
   } catch {
-    logger.warn("Could not parse SOLANA_RPC_URL for logging.");
+    logger.warn("Could not parse SOLANA_RPC_URL.");
   }
 
   runMigrations();
@@ -28,16 +27,19 @@ async function main() {
 
   setDecisionHandler(onTokenDecision);
 
+  // Always bind HTTP first so Railway health checks pass
   startWebServer();
   if (config.webBaseUrl) {
-    logger.info(`Web terminal public URL: ${config.webBaseUrl}`);
+    logger.info(`Web terminal: ${config.webBaseUrl}`);
   } else {
-    logger.warn(
-      "WEB_BASE_URL not set — set it to your public HTTPS URL so Telegram login links work."
-    );
+    logger.warn("WEB_BASE_URL not set — Telegram login links will fail.");
   }
 
-  startPositionMonitor();
+  try {
+    startPositionMonitor();
+  } catch (error) {
+    logger.error("Position monitor failed to start", error);
+  }
 
   void scanner
     .start()
@@ -55,7 +57,11 @@ async function main() {
 
 async function shutdown(signal: string) {
   logger.info(`Received ${signal}. Shutting down...`);
-  stopPositionMonitor();
+  try {
+    stopPositionMonitor();
+  } catch {
+    /* ignore */
+  }
   try {
     await bot.stop();
   } catch (error) {
@@ -79,6 +85,14 @@ process.once("SIGINT", () => {
 });
 process.once("SIGTERM", () => {
   void shutdown("SIGTERM");
+});
+
+process.on("uncaughtException", (error) => {
+  logger.error("Uncaught exception", error);
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled rejection", reason);
 });
 
 main().catch((error) => {

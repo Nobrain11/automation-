@@ -8,7 +8,6 @@ function required(name: string): string {
   return value;
 }
 
-/** On Railway, default to /data so a mounted volume keeps wallets across deploys. */
 function defaultDatabasePath(): string {
   if (process.env.DATABASE_PATH?.trim()) {
     return process.env.DATABASE_PATH.trim();
@@ -18,6 +17,7 @@ function defaultDatabasePath(): string {
       process.env.RAILWAY_PROJECT_ID ||
       process.env.RAILWAY_SERVICE_ID
   );
+  // Prefer /data when volume exists; sqlite.ts falls back if not writable
   return onRailway ? "/data/bot.sqlite" : "./data/bot.sqlite";
 }
 
@@ -45,10 +45,17 @@ export const config = {
 };
 
 export function validateConfig(): void {
-  const key = Buffer.from(config.walletEncryptionKey, "base64");
+  const raw = config.walletEncryptionKey;
+  let key: Buffer;
+  try {
+    key = Buffer.from(raw, "base64");
+  } catch {
+    throw new Error("WALLET_ENCRYPTION_KEY must be valid base64.");
+  }
   if (key.length !== 32) {
     throw new Error(
-      "WALLET_ENCRYPTION_KEY must be a base64-encoded 32-byte key."
+      "WALLET_ENCRYPTION_KEY must be a base64-encoded 32-byte key. " +
+        `Got ${key.length} bytes. Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
     );
   }
 }
