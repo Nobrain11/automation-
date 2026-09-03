@@ -1,8 +1,7 @@
-// holder-analysis.ts
-
 import { Connection, PublicKey } from "@solana/web3.js";
 
 import { logger } from "../utils/logger.js";
+import { rpcLimiter } from "../utils/rpc-limiter.js";
 
 /*
  * Computes the percentage of total token supply held by the
@@ -23,16 +22,17 @@ export async function computeTop10Percent(
   let largestAccounts;
 
   try {
-    [supplyInfo, largestAccounts] = await Promise.all([
-      connection.getTokenSupply(
-        new PublicKey(mint),
-        "confirmed"
-      ),
-      connection.getTokenLargestAccounts(
-        new PublicKey(mint),
-        "confirmed"
-      )
-    ]);
+    await rpcLimiter.acquire();
+    supplyInfo = await connection.getTokenSupply(
+      new PublicKey(mint),
+      "confirmed"
+    );
+
+    await rpcLimiter.acquire();
+    largestAccounts = await connection.getTokenLargestAccounts(
+      new PublicKey(mint),
+      "confirmed"
+    );
   } catch (error) {
     logger.warn(
       `Failed to fetch holder data for ${mint}`,
