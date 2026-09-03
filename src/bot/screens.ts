@@ -1,4 +1,4 @@
-// src/bot/screens.ts - extended with education layer (no mock data)
+// src/bot/screens.ts — REPLACE existing file
 
 import { getSettings, getReferralStats } from "../db/repositories.js";
 import { getRecentTokens } from "../db/scanner-repository.js";
@@ -326,7 +326,7 @@ Private keys are encrypted before being stored in the local database.
 
 • Keys are never written to logs.
 • A private key is shown only once at creation (or on explicit export after confirmation).
-• The encryption secret comes from the environment (ENCRYPTION_SECRET).
+• The encryption secret comes from the environment (WALLET_ENCRYPTION_KEY).
 • The bot can sign the trades you enable when automation is running.
 • There is no separate "withdraw all" feature beyond configured trading actions.
 
