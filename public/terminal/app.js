@@ -1,3 +1,13 @@
+/** PUMP AUTO terminal — bottom nav workspaces, real data only */
+
+let state = {
+  tab: "home",
+  dash: null,
+  pulse: null,
+  trendCat: "new",
+  menuView: null
+};
+
 async function api(path, opts = {}) {
   const res = await fetch(path, {
     credentials: "same-origin",
@@ -38,23 +48,44 @@ function fmtNum(n, d = 2) {
   return Number(n).toFixed(d);
 }
 
-let lastBuySize = 0.1;
+function hunterLabel(s) {
+  if (!s) return "● READY";
+  if (s.state === "hunting") return "● HUNTING";
+  if (s.state === "paused") return "● PAUSED";
+  if (s.state === "stopped_kill") return "● STOPPED";
+  return "● READY";
+}
 
-function tokenCard(t) {
+function updateTopbar(d) {
+  if (!d) return;
+  const sol =
+    d.sol && d.sol.price != null
+      ? `SOL $${d.sol.price.toFixed(2)}`
+      : "SOL —";
+  document.getElementById("solMetric").textContent = sol;
+  document.getElementById("balMetric").textContent =
+    d.wallet.balanceSol == null
+      ? "Bal —"
+      : `Bal ${d.wallet.balanceSol.toFixed(4)}`;
+  document.getElementById("huntMetric").textContent = hunterLabel(d.hunter);
+}
+
+function tokenCard(t, opts = {}) {
   const liq = fmtNum(t.liquiditySol, 3);
   const top = t.top10 != null ? fmtNum(t.top10, 1) + "%" : "—";
   const mintOk = t.mintRevoked
-    ? "<span class=\"ok\">mint✓</span>"
-    : "<span class=\"bad\">mint✗</span>";
+    ? '<span class="ok">mint✓</span>'
+    : '<span class="bad">mint✗</span>';
   const frzOk = t.freezeRevoked
-    ? "<span class=\"ok\">frz✓</span>"
-    : "<span class=\"bad\">frz✗</span>";
+    ? '<span class="ok">frz✓</span>'
+    : '<span class="bad">frz✗</span>';
   const reasons =
     t.reasons && t.reasons.length
       ? `<div class="reasons">${t.reasons.slice(0, 2).join(" · ")}</div>`
       : "";
   const mint = t.mint || "";
   const sym = (t.symbol || "???").replace(/[<>"']/g, "");
+  const buy = opts.buy !== false;
   return `
     <div class="token" data-mint="${mint}" data-symbol="${sym}">
       <div class="token-top">
@@ -66,29 +97,43 @@ function tokenCard(t) {
         <div>top10 <b>${top}</b></div>
         <div>${mintOk}</div>
         <div>${frzOk}</div>
+        <div>price <b>—</b></div>
+        <div>mcap <b>—</b></div>
       </div>
       ${reasons}
-      <div class="mint">${short(mint)}</div>
-      <button class="buy-btn" type="button">BUY</button>
+      <div class="mint">${mint}</div>
+      <div class="token-actions">
+        <button type="button" class="action ghost copy-ca">Copy CA</button>
+        ${buy ? '<button type="button" class="action primary buy-btn">BUY</button>' : ""}
+      </div>
     </div>`;
 }
 
-function fillCol(el, list, emptyMsg) {
-  if (!list.length) {
-    el.innerHTML = `<div class="empty">${emptyMsg}</div>`;
-    return;
-  }
-  el.innerHTML = list.map(tokenCard).join("");
-  el.querySelectorAll(".buy-btn").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
+function bindTokenActions(root) {
+  root.querySelectorAll(".copy-ca").forEach((btn) => {
+    btn.onclick = async () => {
+      const mint = btn.closest(".token")?.dataset.mint;
+      if (!mint) return;
+      try {
+        await navigator.clipboard.writeText(mint);
+        btn.textContent = "Copied";
+        setTimeout(() => (btn.textContent = "Copy CA"), 1200);
+      } catch {
+        alert(mint);
+      }
+    };
+  });
+  root.querySelectorAll(".buy-btn").forEach((btn) => {
+    btn.onclick = async () => {
       const card = btn.closest(".token");
       const mint = card?.dataset.mint;
       const symbol = card?.dataset.symbol;
       if (!mint) return;
       const size =
-        Number(document.getElementById("inMaxBuy").value) || lastBuySize;
-      if (!confirm(`Buy $${symbol} with ${size} SOL via Jupiter?`)) return;
+        Number(document.getElementById("inMaxBuy")?.value) ||
+        state.dash?.settings?.maxBuy ||
+        0.1;
+      if (!confirm(`Buy $${symbol} with ${size} SOL?`)) return;
       btn.disabled = true;
       btn.textContent = "…";
       try {
@@ -97,48 +142,383 @@ function fillCol(el, list, emptyMsg) {
           body: JSON.stringify({ mint, amountSol: size, symbol })
         });
         if (r.ok) {
-          btn.textContent = "SENT";
           alert("Submitted: " + (r.signature || "ok"));
-          await loadDashboard();
-        } else {
-          btn.textContent = "BUY";
-          alert(r.error || "Buy failed");
-        }
-      } catch (err) {
-        btn.textContent = "BUY";
-        alert(String(err.message || err));
+          await refresh();
+        } else alert(r.error || "Buy failed");
+      } catch (e) {
+        alert(String(e.message || e));
       } finally {
         btn.disabled = false;
+        btn.textContent = "BUY";
       }
-    });
+    };
   });
 }
 
-function renderPositions(positions) {
-  const box = document.getElementById("posBox");
-  if (!positions.length) {
-    box.innerHTML = `<div class="empty-pos">No open positions</div>`;
-    return;
-  }
-  box.innerHTML = positions
-    .map(
-      (p) => `
-    <div class="pos-card" data-id="${p.id}">
-      <div class="pos-top">$${p.symbol || short(p.mint)}</div>
-      <div class="pos-meta">${p.entrySol} SOL · ${short(p.signature)}</div>
-      <button type="button" class="sell-btn">SELL 100%</button>
-    </div>`
-    )
-    .join("");
+function renderHome(d) {
+  const sc = d.scanner || {};
+  const h = d.hunter || {};
+  return `
+    <div class="panel">
+      <h1>COMMAND CENTER</h1>
+      <div class="mono">${hunterLabel(h)}
+Scanner: ${sc.running ? "LIVE" : "OFF"}
+Discovered ${sc.discovered ?? 0} · Evaluated ${sc.evaluated ?? 0}
+Passed ${sc.passed ?? 0} · Rejected ${sc.rejected ?? 0}
+Open positions: ${(d.positions || []).length}
+Wallet: ${d.wallet?.connected ? short(d.wallet.address) : "Not connected"}
+Balance: ${d.wallet?.balanceSol == null ? "—" : d.wallet.balanceSol.toFixed(4) + " SOL"}</div>
+      <div class="row">
+        <button type="button" class="action primary" data-go="automation">Automation</button>
+        <button type="button" class="action" data-go="trending">Trending</button>
+        <button type="button" class="action" data-go="positions">Positions</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>PIPELINE</h2>
+      <div class="pipeline">
+        <span>DISCOVER</span><span class="arrow">↓</span>
+        <span>FILTER</span><span class="arrow">↓</span>
+        <span>ANALYZE</span><span class="arrow">↓</span>
+        <span>SCORE</span><span class="arrow">↓</span>
+        <span>RISK</span><span class="arrow">↓</span>
+        <span>ENTRY</span><span class="arrow">↓</span>
+        <span>MONITOR</span><span class="arrow">↓</span>
+        <span>EXIT</span>
+      </div>
+      <p class="muted">Automation only enters when filters + risk rules pass. Trending does not auto-trade.</p>
+    </div>`;
+}
 
-  box.querySelectorAll(".sell-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const card = btn.closest(".pos-card");
-      const id = Number(card?.dataset.id);
+function renderTrending(d, pulse) {
+  const cat = state.trendCat;
+  const items =
+    cat === "passed"
+      ? pulse?.passed || []
+      : cat === "rejected"
+        ? pulse?.rejected || []
+        : pulse?.newPairs || [];
+
+  const offline =
+    !pulse ||
+    (!pulse.scannerRunning &&
+      !(pulse.newPairs && pulse.newPairs.length) &&
+      !(pulse.passed && pulse.passed.length));
+
+  const list = items.length
+    ? items.map((t) => tokenCard(t)).join("")
+    : `<div class="empty">No tokens in this category yet.</div>`;
+
+  return `
+    <div class="panel">
+      <h1>TRENDING</h1>
+      <p class="muted">LIVE MARKET DISCOVERY — scanner / evaluated tokens only. No fabricated prices.</p>
+      ${offline ? `<div class="offline-banner">MARKET DATA OFFLINE — waiting for scanner discoveries. Price / mcap / volume fields stay blank until a live market feed is connected.</div>` : ""}
+      <div class="chips">
+        <button type="button" class="chip ${cat === "new" ? "active" : ""}" data-cat="new">🆕 NEW</button>
+        <button type="button" class="chip ${cat === "passed" ? "active" : ""}" data-cat="passed">🔥 QUALIFIED</button>
+        <button type="button" class="chip ${cat === "rejected" ? "active" : ""}" data-cat="rejected">🚫 REJECTED</button>
+        <button type="button" class="chip" disabled title="Needs market feed">⚡ MOMENTUM</button>
+        <button type="button" class="chip" disabled title="Needs market feed">📈 GAINERS</button>
+        <button type="button" class="chip" disabled title="Needs market feed">💧 LIQUIDITY</button>
+        <button type="button" class="chip" disabled title="Not configured">👀 WATCHLIST</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>${cat.toUpperCase()} · ${items.length}</h2>
+      <div id="trendList">${list}</div>
+    </div>`;
+}
+
+function renderAutomation(d) {
+  const sc = d.scanner || {};
+  const s = d.settings || {};
+  const h = d.hunter || {};
+  const hunting = h.state === "hunting";
+
+  return `
+    <div class="panel">
+      <h1>AUTOMATION</h1>
+      <p class="muted">AUTO-HUNTER</p>
+      <div class="mono">${hunterLabel(h)}
+Scanner: ${sc.running ? "LIVE" : "OFF"}
+Tokens scanned: ${sc.evaluated ?? 0}
+Qualified: ${sc.passed ?? 0}
+Open positions: ${(d.positions || []).length}
+Daily PnL: No completed closes yet
+Daily loss cap: ${s.dailyLossCap ?? "—"} SOL
+Strategy: filter pass → Jupiter entry</div>
+      <div class="row">
+        ${
+          hunting
+            ? `<button type="button" class="action warn" id="btnStopHunt">PAUSE AUTOMATION</button>`
+            : `<button type="button" class="action primary" id="btnStartHunt">START AUTOMATION</button>`
+        }
+        <button type="button" class="action danger" id="btnKillHunt">EMERGENCY STOP</button>
+        ${h.killSwitch ? `<button type="button" class="action ghost" id="btnClearKill">Clear Kill</button>` : ""}
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>PIPELINE</h2>
+      <div class="pipeline">
+        <span>DISCOVER</span><span class="arrow">↓</span>
+        <span>FILTER</span><span class="arrow">↓</span>
+        <span>ANALYZE</span><span class="arrow">↓</span>
+        <span>SCORE</span><span class="arrow">↓</span>
+        <span>RISK CHECK</span><span class="arrow">↓</span>
+        <span>ENTRY</span><span class="arrow">↓</span>
+        <span>MONITOR</span><span class="arrow">↓</span>
+        <span>EXIT</span>
+      </div>
+      <p class="muted">Live steps appear only from real scanner decisions — no mock activity.</p>
+    </div>
+
+    <div class="panel">
+      <h2>SETTINGS</h2>
+      <div class="setting-row"><span>Buy amount</span><b>${s.maxBuy} SOL</b></div>
+      <div class="setting-row"><span>Slippage</span><b>${s.slippage}%</b></div>
+      <div class="setting-row"><span>Stop loss</span><b>-${s.stopLoss}%</b></div>
+      <div class="setting-row"><span>Trailing after</span><b>+${s.trailingAfter}%</b></div>
+      <div class="setting-row"><span>Trailing pullback</span><b>${s.trailingPullback}%</b></div>
+      <div class="setting-row"><span>Time stop</span><b>${s.timeStopMinutes} min</b></div>
+      <div class="setting-row"><span>Daily loss cap</span><b>${s.dailyLossCap} SOL</b></div>
+      <div class="setting-row"><span>Max trades / hour</span><b>${s.maxTradesHour}</b></div>
+      <div class="setting-row"><span>Max trades / day</span><b>${s.maxTradesDay}</b></div>
+      <div class="setting-row"><span>Smart money boost</span><b>${s.smartMoneyBoost ? "ON" : "OFF"}</b></div>
+      <div class="setting-row"><span>TP tiers</span><b>${(s.tpTiers || []).map((t) => `+${t.profit}/${t.sellPercent}`).join(" · ") || "—"}</b></div>
+      <p class="muted" style="margin-top:10px">Edit buy size / slippage on TRADE tab. Advanced filters use Telegram Settings.</p>
+    </div>
+
+    <div class="panel">
+      <h2>ACTIVITY</h2>
+      <div id="autoActivity" class="mono">Load pulse for recent decisions…</div>
+    </div>`;
+}
+
+function renderTrade(d) {
+  const s = d.settings || {};
+  return `
+    <div class="panel">
+      <h1>TRADE</h1>
+      <p class="muted">Manual size &amp; slippage for Quick Buy. Execution via Jupiter when a route exists.</p>
+      <label class="field">Buy size (SOL)
+        <input id="inMaxBuy" type="number" step="0.01" min="0.01" value="${s.maxBuy ?? 0.1}" />
+      </label>
+      <label class="field">Slippage %
+        <input id="inSlip" type="number" step="1" min="1" value="${s.slippage ?? 20}" />
+      </label>
+      <label class="field">Stop loss %
+        <input id="inSl" type="number" step="1" value="${s.stopLoss ?? 20}" />
+      </label>
+      <label class="field">Daily cap (SOL)
+        <input id="inCap" type="number" step="0.05" min="0" value="${s.dailyLossCap ?? 0.5}" />
+      </label>
+      <button type="button" class="action primary" id="btnSaveSettings">Save</button>
+    </div>
+    <div class="panel">
+      <h2>QUICK NOTE</h2>
+      <p class="muted">Use TRENDING → BUY on a token card. Brand-new bonding curves may show “No Jupiter route” until liquid.</p>
+    </div>`;
+}
+
+function renderPositions(d) {
+  const positions = d.positions || [];
+  if (!positions.length) {
+    return `<div class="panel"><h1>POSITIONS</h1><div class="empty">No open positions</div></div>`;
+  }
+  return `
+    <div class="panel">
+      <h1>POSITIONS</h1>
+      ${positions
+        .map(
+          (p) => `
+        <div class="pos-card" data-id="${p.id}">
+          <div class="pos-top">$${p.symbol || short(p.mint)}</div>
+          <div class="pos-meta">${p.entrySol} SOL · ${short(p.signature)}\n${p.mint}</div>
+          <button type="button" class="action danger sell-btn">SELL 100%</button>
+        </div>`
+        )
+        .join("")}
+    </div>`;
+}
+
+function renderMenu(d) {
+  if (state.menuView === "status") {
+    const sc = d.scanner || {};
+    return `
+      <div class="panel">
+        <h1>STATUS</h1>
+        <div class="mono">${hunterLabel(d.hunter)}
+Scanner ${sc.running ? "LIVE" : "OFF"}
+Disc ${sc.discovered} · Eval ${sc.evaluated} · Pass ${sc.passed}
+Kill: ${d.hunter?.killSwitch ? "ON" : "OFF"}</div>
+        <button type="button" class="action ghost" data-menu-back>← Menu</button>
+      </div>`;
+  }
+  if (state.menuView === "wallet") {
+    return `
+      <div class="panel">
+        <h1>WALLET</h1>
+        <div class="mono">${d.wallet?.connected ? d.wallet.address : "Not connected"}
+Balance: ${d.wallet?.balanceSol == null ? "—" : d.wallet.balanceSol.toFixed(4) + " SOL"}
+Keys never shown in web UI — manage in Telegram.</div>
+        <button type="button" class="action ghost" data-menu-back>← Menu</button>
+      </div>`;
+  }
+  if (state.menuView === "pnl") {
+    return `
+      <div class="panel">
+        <h1>PNL</h1>
+        <div class="mono">${d.pnl?.note || "No completed trades yet"}</div>
+        <button type="button" class="action ghost" data-menu-back>← Menu</button>
+      </div>`;
+  }
+  return `
+    <div class="panel">
+      <h1>MENU</h1>
+      <div class="menu-list">
+        <button type="button" class="action" data-menu="wallet">Wallet</button>
+        <button type="button" class="action" data-menu="pnl">PnL</button>
+        <button type="button" class="action" data-menu="status">Status</button>
+        <button type="button" class="action" data-go="trade">Settings / Trade params</button>
+        <button type="button" class="action" data-go="automation">Risk / Automation</button>
+        <button type="button" class="action danger" id="btnMenuKill">Emergency Stop</button>
+        <button type="button" class="action ghost" id="btnLogout">Logout</button>
+      </div>
+      <p class="muted">Learn / Referral / Support remain in Telegram for now.</p>
+    </div>`;
+}
+
+function render() {
+  const d = state.dash || {
+    wallet: {},
+    hunter: {},
+    scanner: {},
+    settings: {},
+    positions: [],
+    pnl: {}
+  };
+  const ws = document.getElementById("workspace");
+  updateTopbar(state.dash);
+
+  if (state.tab === "home") ws.innerHTML = renderHome(d);
+  else if (state.tab === "trending") ws.innerHTML = renderTrending(d, state.pulse);
+  else if (state.tab === "automation") ws.innerHTML = renderAutomation(d);
+  else if (state.tab === "trade") ws.innerHTML = renderTrade(d);
+  else if (state.tab === "positions") ws.innerHTML = renderPositions(d);
+  else if (state.tab === "menu") ws.innerHTML = renderMenu(d);
+
+  // activity feed from pulse
+  if (state.tab === "automation" && state.pulse) {
+    const act = document.getElementById("autoActivity");
+    if (act) {
+      const rows = (state.pulse.newPairs || []).slice(0, 12);
+      if (!rows.length) {
+        act.textContent = "No evaluated tokens yet.";
+      } else {
+        act.innerHTML = rows
+          .map((t) => {
+            const tms = t.discoveredAt
+              ? new Date(t.discoveredAt).toLocaleTimeString()
+              : "—";
+            const res = t.passed ? "FILTER PASSED" : "FILTER SKIP";
+            return `<div class="feed-line"><b>${tms}</b> · ${res} · $${t.symbol || short(t.mint)}</div>`;
+          })
+          .join("");
+      }
+    }
+  }
+
+  bindWorkspaceEvents();
+  bindTokenActions(ws);
+}
+
+function bindWorkspaceEvents() {
+  document.querySelectorAll("[data-go]").forEach((el) => {
+    el.onclick = () => setTab(el.getAttribute("data-go"));
+  });
+  document.querySelectorAll("[data-cat]").forEach((el) => {
+    el.onclick = () => {
+      state.trendCat = el.getAttribute("data-cat");
+      render();
+    };
+  });
+  document.querySelectorAll("[data-menu]").forEach((el) => {
+    el.onclick = () => {
+      state.menuView = el.getAttribute("data-menu");
+      render();
+    };
+  });
+  document.querySelectorAll("[data-menu-back]").forEach((el) => {
+    el.onclick = () => {
+      state.menuView = null;
+      render();
+    };
+  });
+
+  const start = document.getElementById("btnStartHunt");
+  if (start)
+    start.onclick = async () => {
+      const r = await api("/api/hunter/start", { method: "POST" });
+      if (!r.ok) alert(r.error || "Failed");
+      await refresh();
+    };
+  const stop = document.getElementById("btnStopHunt");
+  if (stop)
+    stop.onclick = async () => {
+      await api("/api/hunter/stop", { method: "POST" });
+      await refresh();
+    };
+  const kill = document.getElementById("btnKillHunt");
+  if (kill)
+    kill.onclick = async () => {
+      if (!confirm("Emergency stop blocks new auto entries.")) return;
+      await api("/api/hunter/kill", { method: "POST" });
+      await refresh();
+    };
+  const clear = document.getElementById("btnClearKill");
+  if (clear)
+    clear.onclick = async () => {
+      await api("/api/hunter/clear-kill", { method: "POST" });
+      await refresh();
+    };
+  const menuKill = document.getElementById("btnMenuKill");
+  if (menuKill)
+    menuKill.onclick = async () => {
+      if (!confirm("Emergency stop?")) return;
+      await api("/api/hunter/kill", { method: "POST" });
+      await refresh();
+    };
+  const logout = document.getElementById("btnLogout");
+  if (logout)
+    logout.onclick = async () => {
+      await api("/api/logout", { method: "POST" });
+      showGate();
+    };
+  const save = document.getElementById("btnSaveSettings");
+  if (save)
+    save.onclick = async () => {
+      const body = {
+        max_buy: Number(document.getElementById("inMaxBuy").value),
+        slippage: Number(document.getElementById("inSlip").value),
+        stop_loss: Number(document.getElementById("inSl").value),
+        daily_loss_cap: Number(document.getElementById("inCap").value)
+      };
+      const r = await api("/api/settings", {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+      if (!r.ok) alert(r.error || "Save failed");
+      await refresh();
+    };
+
+  document.querySelectorAll(".sell-btn").forEach((btn) => {
+    btn.onclick = async () => {
+      const id = Number(btn.closest(".pos-card")?.dataset.id);
       if (!id) return;
-      if (!confirm("Sell 100% of this position via Jupiter?")) return;
+      if (!confirm("Sell 100% via Jupiter?")) return;
       btn.disabled = true;
-      btn.textContent = "…";
       try {
         const r = await api("/api/trade/sell", {
           method: "POST",
@@ -146,167 +526,51 @@ function renderPositions(positions) {
         });
         if (r.ok) {
           alert("Sell submitted: " + (r.signature || "ok"));
-          await loadDashboard();
-        } else {
-          alert(r.error || "Sell failed");
-          btn.textContent = "SELL 100%";
-          btn.disabled = false;
-        }
+          await refresh();
+        } else alert(r.error || "Sell failed");
       } catch (e) {
         alert(String(e.message || e));
-        btn.textContent = "SELL 100%";
+      } finally {
         btn.disabled = false;
       }
-    });
+    };
   });
 }
 
-async function loadDashboard() {
-  const d = await api("/api/dashboard");
-
-  const sol =
-    d.sol && d.sol.price != null
-      ? `SOL <strong>$${d.sol.price.toFixed(2)}</strong>` +
-        (d.sol.change24h != null
-          ? ` ${d.sol.change24h >= 0 ? "▲" : "▼"}${Math.abs(d.sol.change24h).toFixed(1)}%`
-          : "")
-      : "SOL <strong>—</strong>";
-  document.getElementById("solMetric").innerHTML = sol;
-
-  const bal =
-    d.wallet.balanceSol == null
-      ? "Bal <strong>—</strong>"
-      : `Bal <strong>${d.wallet.balanceSol.toFixed(4)}</strong>` +
-        (d.wallet.balanceUsd != null ? ` ($${d.wallet.balanceUsd})` : "");
-  document.getElementById("balMetric").innerHTML = bal;
-
-  const hs =
-    d.hunter.state === "hunting"
-      ? "● HUNTING"
-      : d.hunter.state === "stopped_kill"
-        ? "● KILL"
-        : "● READY";
-  document.getElementById("huntMetric").textContent = hs;
-  document.getElementById("hunterState").textContent =
-    hs +
-    (d.hunter.killSwitch ? "\nKill switch ON" : "") +
-    "\nAuto-buys on PASS";
-
-  document.getElementById("scanPill").classList.toggle("on", d.scanner.running);
-  document.getElementById("scanPill").textContent = d.scanner.running
-    ? "LIVE"
-    : "OFF";
-
-  document.getElementById("statsBox").textContent =
-    `Disc  ${d.scanner.discovered}\n` +
-    `Eval  ${d.scanner.evaluated}\n` +
-    `Pass  ${d.scanner.passed}\n` +
-    `Skip  ${d.scanner.rejected}`;
-
-  renderPositions(d.positions || []);
-
-  const setVal = (id, v) => {
-    const el = document.getElementById(id);
-    if (el && document.activeElement !== el) el.value = v;
-  };
-  setVal("inMaxBuy", d.settings.maxBuy);
-  setVal("inSlip", d.settings.slippage);
-  setVal("inSl", d.settings.stopLoss);
-  setVal("inCap", d.settings.dailyLossCap);
-  lastBuySize = d.settings.maxBuy;
-
-  document
-    .getElementById("btnClearKill")
-    .classList.toggle("hidden", !d.hunter.killSwitch);
+function setTab(tab) {
+  state.tab = tab;
+  if (tab !== "menu") state.menuView = null;
+  document.querySelectorAll(".nav-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === tab);
+  });
+  render();
 }
 
-async function loadPulse() {
-  const p = await api("/api/pulse");
-  document.getElementById("cntNew").textContent = String(p.newPairs.length);
-  document.getElementById("cntPass").textContent = String(p.passed.length);
-  document.getElementById("cntSkip").textContent = String(p.rejected.length);
-
-  document.getElementById("pulseMeta").textContent = p.scannerRunning
-    ? "Scanner LIVE · BUY / auto-hunter use Jupiter"
-    : "Scanner idle · showing last saved tokens";
-
-  fillCol(
-    document.getElementById("colNew"),
-    p.newPairs,
-    "No tokens discovered yet"
-  );
-  fillCol(
-    document.getElementById("colPass"),
-    p.passed,
-    "No tokens passed filters"
-  );
-  fillCol(
-    document.getElementById("colSkip"),
-    p.rejected,
-    "No rejections yet"
-  );
+async function refresh() {
+  try {
+    state.dash = await api("/api/dashboard");
+    state.pulse = await api("/api/pulse");
+    render();
+  } catch {
+    /* gate handled */
+  }
 }
 
 async function boot() {
   try {
     await api("/api/me");
     showApp();
-    await loadDashboard();
-    await loadPulse();
+    document.querySelectorAll(".nav-btn").forEach((b) => {
+      b.onclick = () => setTab(b.dataset.tab);
+    });
+    await refresh();
   } catch {
     showGate();
   }
 }
 
-document.getElementById("btnRefresh").onclick = async () => {
-  await loadDashboard();
-  await loadPulse();
-};
-document.getElementById("btnLogout").onclick = async () => {
-  await api("/api/logout", { method: "POST" });
-  showGate();
-};
-document.getElementById("btnStart").onclick = async () => {
-  const r = await api("/api/hunter/start", { method: "POST" });
-  if (!r.ok) alert(r.error || "Could not start");
-  await loadDashboard();
-};
-document.getElementById("btnStop").onclick = async () => {
-  await api("/api/hunter/stop", { method: "POST" });
-  await loadDashboard();
-};
-document.getElementById("btnKill").onclick = async () => {
-  if (
-    !confirm(
-      "Emergency stop blocks new auto entries. Does not sell positions."
-    )
-  )
-    return;
-  await api("/api/hunter/kill", { method: "POST" });
-  await loadDashboard();
-};
-document.getElementById("btnClearKill").onclick = async () => {
-  await api("/api/hunter/clear-kill", { method: "POST" });
-  await loadDashboard();
-};
-document.getElementById("btnSaveSettings").onclick = async () => {
-  const body = {
-    max_buy: Number(document.getElementById("inMaxBuy").value),
-    slippage: Number(document.getElementById("inSlip").value),
-    stop_loss: Number(document.getElementById("inSl").value),
-    daily_loss_cap: Number(document.getElementById("inCap").value)
-  };
-  const r = await api("/api/settings", {
-    method: "POST",
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) alert(r.error || "Save failed");
-  await loadDashboard();
-};
-
 boot();
 setInterval(() => {
   if (document.getElementById("app").classList.contains("hidden")) return;
-  loadDashboard().catch(() => {});
-  loadPulse().catch(() => {});
+  refresh();
 }, 5000);
