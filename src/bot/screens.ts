@@ -1,4 +1,4 @@
-// src/bot/screens.ts — REPLACE existing file
+// src/bot/screens.ts - extended with education layer (no mock data)
 
 import { getSettings, getReferralStats } from "../db/repositories.js";
 import { getRecentTokens } from "../db/scanner-repository.js";
@@ -178,6 +178,16 @@ export function statusText(telegramId: number) {
           ? "🟡 PAUSED"
           : "🔴 STOPPED";
 
+  const dropEntries = Object.entries(stats.dropReasons)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+
+  const dropLines = dropEntries.length
+    ? dropEntries
+        .map(([reason, count]) => `• ${reason}: ${count}`)
+        .join("\n")
+    : "• none yet";
+
   return `
 📡 <b>SYSTEM STATUS</b>
 
@@ -191,6 +201,9 @@ export function statusText(telegramId: number) {
 • Evaluated: ${stats.evaluated}
 • Passed: ${stats.passed}
 • Reconnects: ${stats.websocketReconnects}
+
+<b>Not Evaluated — Why</b>
+${dropLines}
 
 <b>Trading</b>
 • Status: ${botState}
@@ -397,6 +410,44 @@ export function referralText(
     ? `https://t.me/${botUsername}?start=ref_${info.code}`
     : info.code;
   return `🎁 <b>REFERRAL</b>\n\nCode: <code>${info.code}</code>\nLink: <code>${link}</code>\nReferred: <b>${info.referredCount}</b>\nEarned: <b>${info.totalEarnedSol} SOL</b>`.trim();
+}
+
+export async function portfolioText(
+  telegramId: number
+): Promise<string> {
+  const address = getAddress(telegramId);
+
+  let balance = "unavailable";
+  if (address) {
+    try {
+      balance = `${(await getBalance(telegramId)).toFixed(4)} SOL`;
+    } catch {
+      balance = "unavailable";
+    }
+  }
+
+  return `
+📊 <b>PORTFOLIO</b>
+
+Wallet:
+<code>${address ?? "not connected"}</code>
+Balance: ${balance}
+
+Open positions: <b>0</b>
+Unrealized PnL: <b>0 SOL</b>
+
+No open positions — auto-trading entry is not active yet.
+`.trim();
+}
+
+export function ordersText(): string {
+  return `
+📋 <b>RECENT ORDERS</b>
+
+No trades executed yet.
+
+This will show real trade history once the auto-trading engine is active.
+`.trim();
 }
 
 export function walletsListText(
