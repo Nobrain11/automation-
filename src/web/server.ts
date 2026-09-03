@@ -16,6 +16,7 @@ import {
 import {
   buildActivity,
   buildDashboard,
+  buildPulse,
   clearKill,
   emergencyStop,
   patchSettings,
@@ -82,13 +83,21 @@ async function serveStatic(res: ServerResponse, urlPath: string) {
       const data = await readFile(join(PUBLIC_DIR, "index.html"));
       send(res, 200, data, "text/html; charset=utf-8");
     } catch {
-      send(
-        res,
-        404,
-        `Terminal UI not found. Looked in: ${PUBLIC_DIR}`
-      );
+      send(res, 404, `Terminal UI not found. Looked in: ${PUBLIC_DIR}`);
     }
   }
+}
+
+function requireAuth(
+  req: IncomingMessage,
+  res: ServerResponse
+): number | null {
+  const id = sessionFromReq(req);
+  if (!id) {
+    sendJson(res, 401, { error: "unauthorized" });
+    return null;
+  }
+  return id;
 }
 
 export function startWebServer(): void {
@@ -122,41 +131,36 @@ export function startWebServer(): void {
       }
 
       if (path === "/api/me" && req.method === "GET") {
-        const telegramId = sessionFromReq(req);
-        if (!telegramId) {
-          sendJson(res, 401, { error: "unauthorized" });
-          return;
-        }
+        const telegramId = requireAuth(req, res);
+        if (!telegramId) return;
         sendJson(res, 200, { telegramId });
         return;
       }
 
       if (path === "/api/dashboard" && req.method === "GET") {
-        const telegramId = sessionFromReq(req);
-        if (!telegramId) {
-          sendJson(res, 401, { error: "unauthorized" });
-          return;
-        }
+        const telegramId = requireAuth(req, res);
+        if (!telegramId) return;
         sendJson(res, 200, await buildDashboard(telegramId));
         return;
       }
 
       if (path === "/api/activity" && req.method === "GET") {
-        const telegramId = sessionFromReq(req);
-        if (!telegramId) {
-          sendJson(res, 401, { error: "unauthorized" });
-          return;
-        }
-        sendJson(res, 200, buildActivity(25));
+        const telegramId = requireAuth(req, res);
+        if (!telegramId) return;
+        sendJson(res, 200, buildActivity(40));
+        return;
+      }
+
+      if (path === "/api/pulse" && req.method === "GET") {
+        const telegramId = requireAuth(req, res);
+        if (!telegramId) return;
+        sendJson(res, 200, buildPulse(30));
         return;
       }
 
       if (path === "/api/settings" && req.method === "POST") {
-        const telegramId = sessionFromReq(req);
-        if (!telegramId) {
-          sendJson(res, 401, { error: "unauthorized" });
-          return;
-        }
+        const telegramId = requireAuth(req, res);
+        if (!telegramId) return;
         let body: Record<string, unknown> = {};
         try {
           body = JSON.parse(await readBody(req));
@@ -169,41 +173,29 @@ export function startWebServer(): void {
       }
 
       if (path === "/api/hunter/start" && req.method === "POST") {
-        const telegramId = sessionFromReq(req);
-        if (!telegramId) {
-          sendJson(res, 401, { error: "unauthorized" });
-          return;
-        }
+        const telegramId = requireAuth(req, res);
+        if (!telegramId) return;
         sendJson(res, 200, startHunter(telegramId));
         return;
       }
 
       if (path === "/api/hunter/stop" && req.method === "POST") {
-        const telegramId = sessionFromReq(req);
-        if (!telegramId) {
-          sendJson(res, 401, { error: "unauthorized" });
-          return;
-        }
+        const telegramId = requireAuth(req, res);
+        if (!telegramId) return;
         sendJson(res, 200, stopHunter(telegramId));
         return;
       }
 
       if (path === "/api/hunter/kill" && req.method === "POST") {
-        const telegramId = sessionFromReq(req);
-        if (!telegramId) {
-          sendJson(res, 401, { error: "unauthorized" });
-          return;
-        }
+        const telegramId = requireAuth(req, res);
+        if (!telegramId) return;
         sendJson(res, 200, emergencyStop(telegramId));
         return;
       }
 
       if (path === "/api/hunter/clear-kill" && req.method === "POST") {
-        const telegramId = sessionFromReq(req);
-        if (!telegramId) {
-          sendJson(res, 401, { error: "unauthorized" });
-          return;
-        }
+        const telegramId = requireAuth(req, res);
+        if (!telegramId) return;
         sendJson(res, 200, clearKill(telegramId));
         return;
       }
@@ -229,7 +221,6 @@ export function startWebServer(): void {
     }
   });
 
-  // Bind all interfaces — required on Railway/containers
   server.listen(port, "0.0.0.0", () => {
     logger.info(`Web terminal listening on 0.0.0.0:${port}`);
   });

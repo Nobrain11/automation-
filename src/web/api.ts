@@ -1,10 +1,39 @@
 // src/web/api.ts — terminal JSON API (real data only)
 
 import { getSettings, updateSettings, getReferralStats } from "../db/repositories.js";
-import { getRecentTokens } from "../db/scanner-repository.js";
+import { getRecentTokens, getScannerCounts } from "../db/scanner-repository.js";
 import { getAddress, getBalance, hasWallet } from "../services/wallet.js";
 import { updateSetting } from "../services/settings.js";
 import { scanner } from "../scanner/scanner-instance.js";
+
+function mapToken(t: any) {
+  let reasons: string[] = [];
+  try {
+    reasons =
+      typeof t.rejection_reasons === "string"
+        ? JSON.parse(t.rejection_reasons || "[]")
+        : t.rejectionReasons ?? [];
+  } catch {
+    reasons = [];
+  }
+  return {
+    mint: t.mint,
+    name: t.name,
+    symbol: t.symbol,
+    creator: t.creator,
+    discoveredAt: t.discovered_at ?? t.discoveredAt,
+    ageSeconds: t.age_seconds ?? t.ageSeconds,
+    isBondingCurve: Boolean(t.is_bonding_curve ?? t.isBondingCurve),
+    mintRevoked: Boolean(t.mint_authority_revoked ?? t.mintAuthorityRevoked),
+    freezeRevoked: Boolean(
+      t.freeze_authority_revoked ?? t.freezeAuthorityRevoked
+    ),
+    top10: t.top10_percent ?? t.top10Percent ?? null,
+    liquiditySol: t.curve_liquidity_sol ?? t.curveLiquiditySol ?? null,
+    passed: Boolean(t.passed),
+    reasons
+  };
+}
 
 export async function buildDashboard(telegramId: number) {
   const s = getSettings(telegramId);
@@ -18,6 +47,7 @@ export async function buildDashboard(telegramId: number) {
     }
   }
   const stats = scanner.getStats();
+  const dbCounts = getScannerCounts();
   const ref = getReferralStats(telegramId);
   const sol = await fetchSolPrice();
 
@@ -44,10 +74,10 @@ export async function buildDashboard(telegramId: number) {
     },
     scanner: {
       running: stats.running,
-      discovered: stats.discovered,
-      evaluated: stats.evaluated,
-      passed: stats.passed,
-      rejected: stats.rejected,
+      discovered: stats.discovered || dbCounts.total || 0,
+      evaluated: stats.evaluated || dbCounts.total || 0,
+      passed: stats.passed || dbCounts.passed || 0,
+      rejected: stats.rejected || dbCounts.rejected || 0,
       reconnects: stats.websocketReconnects,
       lastEventAt: stats.lastEventAt
     },
@@ -101,19 +131,28 @@ async function fetchSolPrice(): Promise<{
   }
 }
 
-export function buildActivity(limit = 20) {
+export function buildActivity(limit = 40) {
   const stats = scanner.getStats();
-  const tokens = getRecentTokens(limit);
+  const tokens = getRecentTokens(limit).map(mapToken);
   return {
     scannerRunning: stats.running,
-    items: tokens.map((t: any) => ({
-      mint: t.mint,
-      symbol: t.symbol,
-      name: t.name,
-      passed: Boolean(t.passed),
-      reasons: t.rejectionReasons ?? [],
-      discoveredAt: t.discoveredAt
-    }))
+    items: tokens
+  };
+}
+
+/** Axiom-style Pulse columns from real DB rows */
+export function buildPulse(limit = 30) {
+  const all = getRecentTokens(80).map(mapToken);
+  const newPairs = all.slice(0, limit);
+  const passed = all.filter((t) => t.passed).slice(0, limit);
+  const rejected = all.filter((t) => !t.passed).slice(0, limit);
+  const stats = scanner.getStats();
+  return {
+    scannerRunning: stats.running,
+    lastEventAt: stats.lastEventAt,
+    newPairs,
+    passed,
+    rejected
   };
 }
 
@@ -125,7 +164,7 @@ export function startHunter(telegramId: number): { ok: boolean; error?: string }
   if (s.kill_switch) {
     return {
       ok: false,
-      error: "Emergency stop is active. Use Clear Kill in web or Telegram."
+      error: "Emergency stop is active. Use Clear Kill."
     };
   }
   updateSettings(telegramId, { auto_state: "running" });
