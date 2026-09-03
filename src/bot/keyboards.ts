@@ -12,10 +12,11 @@ export function onboardingKeyboard() {
     .text("🔒 SECURITY", "edu:security");
 }
 
-/** Home command center — all core actions visible */
 export function mainKeyboard() {
   return new InlineKeyboard()
     .text("🤖 START HUNTING", "auto:start")
+    .row()
+    .text("🖥 WEB TERMINAL", "web:terminal")
     .row()
     .text("⚡ BUY TOKEN", "buy:start")
     .text("📉 SELL", "sell:menu")
@@ -40,10 +41,6 @@ export function mainKeyboard() {
 
 export function backKeyboard() {
   return new InlineKeyboard().text("← HOME", "home");
-}
-
-export function backToSettingsKeyboard() {
-  return new InlineKeyboard().text("← SETTINGS", "settings");
 }
 
 export function settingsKeyboard(settings: any) {
