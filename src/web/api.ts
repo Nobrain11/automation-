@@ -4,7 +4,7 @@ import { getSettings, updateSettings, getReferralStats } from "../db/repositorie
 import { getRecentTokens, getScannerCounts } from "../db/scanner-repository.js";
 import { listOpenPositions } from "../db/positions.js";
 import { getAddress, getBalance, hasWallet } from "../services/wallet.js";
-import { buyToken } from "../services/trade.js";
+import { buyToken, sellPosition } from "../services/trade.js";
 import { updateSetting } from "../services/settings.js";
 import { scanner } from "../scanner/scanner-instance.js";
 
@@ -178,6 +178,17 @@ export async function executeBuy(
     mint: body.mint,
     amountSol: body.amountSol,
     symbol: body.symbol
+  });
+}
+
+export async function executeSell(
+  telegramId: number,
+  body: { positionId?: number }
+) {
+  if (!body.positionId) return { ok: false, error: "positionId required" };
+  return sellPosition({
+    telegramId,
+    positionId: body.positionId
   });
 }
 
