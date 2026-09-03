@@ -1,4 +1,4 @@
-// src/bot/bot.ts - PUMP AUTO terminal handlers
+// src/bot/bot.ts - PUMP AUTO terminal handlers + web login
 
 import {
   Bot,
@@ -100,6 +100,7 @@ import {
 } from "./screens.js";
 
 import { logger } from "../utils/logger.js";
+import { createLoginToken } from "../web/auth.js";
 
 export const bot = new Bot(config.botToken);
 
@@ -215,8 +216,7 @@ bot.command("status", async (ctx) => {
 });
 
 bot.command("help", async (ctx) => {
-  const id = requireUser(ctx);
-  void id;
+  requireUser(ctx);
   await render(ctx, helpHomeText(), eduHomeKeyboard());
 });
 
@@ -437,11 +437,7 @@ bot.on("callback_query:data", async (ctx) => {
     }
     if (data === "wallet:logout") {
       logout(id);
-      return render(
-        ctx,
-        "🚪 Wallet disconnected.",
-        onboardingKeyboard()
-      );
+      return render(ctx, "🚪 Wallet disconnected.", onboardingKeyboard());
     }
     if (data === "wallet:tx") {
       return render(
@@ -460,10 +456,6 @@ bot.on("callback_query:data", async (ctx) => {
     if (data.startsWith("setting:")) {
       const field = data.slice("setting:".length);
       const s = getSettings(id);
-      const label =
-        field === "smart_money"
-          ? `Smart Money: ${s.smart_money_boost ? "ON" : "OFF"}`
-          : `${field}: ${(s as any)[field]}`;
       if (field === "smart_money") {
         updateSettings(id, {
           smart_money_boost: s.smart_money_boost ? 0 : 1
@@ -474,6 +466,7 @@ bot.on("callback_query:data", async (ctx) => {
           settingsKeyboard(getSettings(id))
         );
       }
+      const label = `${field}: ${(s as any)[field]}`;
       return render(
         ctx,
         `✏️ <b>${label}</b>\n\nAdjust with − / + or Custom.`,
@@ -592,6 +585,26 @@ bot.on("callback_query:data", async (ctx) => {
     }
     if (data === "sell:menu") {
       return render(ctx, sellMenuText(), sellEmptyKeyboard());
+    }
+    if (data === "web:terminal") {
+      const base = config.webBaseUrl;
+      if (!base) {
+        return render(
+          ctx,
+          `🖥 <b>WEB TERMINAL</b>\n\nWEB_BASE_URL is not configured on the server.\nSet it to your public Railway URL, then reopen this button.`,
+          backKeyboard()
+        );
+      }
+      const token = createLoginToken(id);
+      const link = `${base}/auth/callback?token=${encodeURIComponent(token)}`;
+      return render(
+        ctx,
+        `🖥 <b>WEB TERMINAL</b>\n\nSame wallet, settings, scanner, and hunter state as Telegram.\nPrivate keys are never shown in the web UI.\n\nLink expires in <b>10 minutes</b>.`,
+        new InlineKeyboard()
+          .url("Open Terminal", link)
+          .row()
+          .text("← HOME", "home")
+      );
     }
     if (data === "status") {
       return render(
