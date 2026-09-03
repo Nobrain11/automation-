@@ -92,6 +92,18 @@ export function listOpenPositions(telegramId: number): PositionRow[] {
     .all(telegramId) as PositionRow[];
 }
 
+export function listAllOpenPositions(): PositionRow[] {
+  return db
+    .prepare(
+      `
+    SELECT * FROM positions
+    WHERE status = 'open'
+    ORDER BY created_at ASC
+  `
+    )
+    .all() as PositionRow[];
+}
+
 export function recordTrade(input: {
   telegramId: number;
   mint: string;
@@ -117,4 +129,27 @@ export function recordTrade(input: {
     input.error ?? null,
     Date.now()
   );
+}
+
+export function listRecentTrades(telegramId: number, limit = 30) {
+  return db
+    .prepare(
+      `
+    SELECT * FROM trades
+    WHERE telegram_id = ?
+    ORDER BY created_at DESC
+    LIMIT ?
+  `
+    )
+    .all(telegramId, limit) as Array<{
+    id: number;
+    telegram_id: number;
+    mint: string;
+    side: string;
+    amount_sol: number;
+    signature: string | null;
+    status: string;
+    error: string | null;
+    created_at: number;
+  }>;
 }

@@ -1,4 +1,4 @@
-// src/index.ts — web first; scanner + hunter + bot
+// src/index.ts — web first; scanner + hunter + monitor + bot
 
 import { bot } from "./bot/bot.js";
 import { config, validateConfig } from "./config.js";
@@ -6,6 +6,10 @@ import { runMigrations } from "./db/migrations.js";
 import { closeDatabase } from "./db/sqlite.js";
 import { scanner, setDecisionHandler } from "./scanner/scanner-instance.js";
 import { onTokenDecision } from "./services/hunter.js";
+import {
+  startPositionMonitor,
+  stopPositionMonitor
+} from "./services/monitor.js";
 import { logger } from "./utils/logger.js";
 import { startWebServer } from "./web/server.js";
 
@@ -22,7 +26,6 @@ async function main() {
   runMigrations();
   logger.info("Database initialized.");
 
-  // Auto-Hunter executes buys when tokens pass filters
   setDecisionHandler(onTokenDecision);
 
   startWebServer();
@@ -33,6 +36,8 @@ async function main() {
       "WEB_BASE_URL not set — set it to your public HTTPS URL so Telegram login links work."
     );
   }
+
+  startPositionMonitor();
 
   void scanner
     .start()
@@ -50,6 +55,7 @@ async function main() {
 
 async function shutdown(signal: string) {
   logger.info(`Received ${signal}. Shutting down...`);
+  stopPositionMonitor();
   try {
     await bot.stop();
   } catch (error) {
