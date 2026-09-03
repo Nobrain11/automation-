@@ -123,7 +123,10 @@ export function startHunter(telegramId: number): { ok: boolean; error?: string }
   }
   const s = getSettings(telegramId);
   if (s.kill_switch) {
-    return { ok: false, error: "Emergency stop is active. Use Clear Kill in web or Telegram." };
+    return {
+      ok: false,
+      error: "Emergency stop is active. Use Clear Kill in web or Telegram."
+    };
   }
   updateSettings(telegramId, { auto_state: "running" });
   return { ok: true };
