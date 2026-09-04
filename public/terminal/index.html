@@ -3,28 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#06090d" />
+  <meta name="theme-color" content="#070b10" />
   <meta name="description" content="PUMP AUTO — Solana trading terminal" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/logo.svg" />
   <title>PUMP AUTO — Terminal</title>
   <link rel="stylesheet" href="/styles.css" />
-  <style>
-    .logo-img { display: block; border-radius: 14px; flex-shrink: 0; }
-    .logo-img.sm { border-radius: 8px; width: 28px; height: 28px; }
-    .gate .logo-img { margin: 0 auto 14px; }
-    .gate .logo { text-align: center; font-weight: 800; font-size: 20px; letter-spacing: 0.04em; }
-    .gate .gate-title { text-align: center; font-size: 10px; letter-spacing: 0.14em; color: var(--muted); margin: 6px 0 14px; }
-  </style>
 </head>
 <body>
   <div id="gate" class="gate">
-    <div class="card gate-card">
+    <div class="gate-card">
       <img class="logo-img" src="/logo.svg" width="72" height="72" alt="PUMP AUTO" />
-      <div class="logo">⚡ PUMP AUTO</div>
-      <p class="gate-title">SOLANA TRADING TERMINAL</p>
+      <div class="logo">PUMP <span style="color:#48e39a">AUTO</span></div>
+      <p class="gate-title">SOLANA AUTOMATION TERMINAL</p>
       <p class="muted">Open from Telegram → <b>WEB TERMINAL</b> to sign in.</p>
-      <p class="muted">Login link expires in 10 minutes. Real data only.</p>
+      <p class="muted">Login expires in 10 minutes. Real data only.</p>
     </div>
   </div>
 
@@ -33,8 +26,8 @@
       <div class="brand">
         <img class="logo-img sm" src="/logo.svg" width="28" height="28" alt="" />
         <div>
-          <div class="brand-title">PUMP AUTO</div>
-          <div class="brand-sub">SOLANA TRADING TERMINAL</div>
+          <div class="brand-title">PUMP <span class="accent">AUTO</span></div>
+          <div class="brand-sub">SOLANA AUTOMATION TERMINAL</div>
         </div>
       </div>
       <div class="top-metrics">
@@ -47,24 +40,12 @@
     <main id="workspace" class="workspace"></main>
 
     <nav class="bottom-nav" aria-label="Primary">
-      <button type="button" data-tab="home" class="nav-btn active">
-        <span class="nav-ico">⌂</span><span>HOME</span>
-      </button>
-      <button type="button" data-tab="trending" class="nav-btn">
-        <span class="nav-ico">🔥</span><span>TRENDING</span>
-      </button>
-      <button type="button" data-tab="automation" class="nav-btn">
-        <span class="nav-ico">🤖</span><span>AUTO</span>
-      </button>
-      <button type="button" data-tab="trade" class="nav-btn">
-        <span class="nav-ico">⚡</span><span>TRADE</span>
-      </button>
-      <button type="button" data-tab="positions" class="nav-btn">
-        <span class="nav-ico">📊</span><span>POS</span>
-      </button>
-      <button type="button" data-tab="menu" class="nav-btn">
-        <span class="nav-ico">☰</span><span>MENU</span>
-      </button>
+      <button type="button" data-tab="home" class="nav-btn active"><span class="nav-ico">⌂</span><span>HOME</span></button>
+      <button type="button" data-tab="trending" class="nav-btn"><span class="nav-ico">🔥</span><span>TRENDING</span></button>
+      <button type="button" data-tab="automation" class="nav-btn"><span class="nav-ico">🤖</span><span>AUTO</span></button>
+      <button type="button" data-tab="trade" class="nav-btn"><span class="nav-ico">⚡</span><span>TRADE</span></button>
+      <button type="button" data-tab="positions" class="nav-btn"><span class="nav-ico">📊</span><span>POS</span></button>
+      <button type="button" data-tab="menu" class="nav-btn"><span class="nav-ico">☰</span><span>MENU</span></button>
     </nav>
   </div>
 
