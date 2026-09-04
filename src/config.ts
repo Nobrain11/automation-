@@ -1,5 +1,7 @@
 import "dotenv/config";
 
+// Accept both deployment-era and local naming for the Telegram token.
+
 function required(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
