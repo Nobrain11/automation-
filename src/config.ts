@@ -1,4 +1,10 @@
 import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+import { createHash } from "node:crypto";
+
+// v0 exposes managed variables outside the project directory during preview.
+// Load that file when present, while preserving normal process environment values.
+loadEnv({ path: "/vercel/share/.env.project", override: false });
 
 // Accept both deployment-era and local naming for the Telegram token.
 
@@ -8,6 +14,20 @@ function required(name: string): string {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value;
+}
+
+function rpcEndpoint(): string {
+  const value = process.env.SOLANA_RPC_URL?.trim();
+  return value && /^https?:\/\//i.test(value)
+    ? value
+    : "https://api.mainnet-beta.solana.com";
+}
+
+function encryptionKey(): string {
+  const raw = required("WALLET_ENCRYPTION_KEY");
+  const decoded = Buffer.from(raw, "base64");
+  if (decoded.length === 32) return raw;
+  return createHash("sha256").update(raw).digest("base64");
 }
 
 function defaultDatabasePath(): string {
@@ -24,13 +44,17 @@ function defaultDatabasePath(): string {
 }
 
 export const config = {
-  botToken: process.env.BOT_TOKEN?.trim() || required("TELEGRAM_BOT_TOKEN"),
+  // v0/Railway projects may expose the Telegram credential under TELEGRAM.
+  // Keep the canonical name first, while accepting the configured alias.
+  botToken:
+    process.env.TELEGRAM_BOT_TOKEN?.trim() ||
+    process.env.BOT_TOKEN?.trim() ||
+    process.env.TELEGRAM?.trim() ||
+    required("TELEGRAM_BOT_TOKEN"),
 
-  rpcUrl:
-    process.env.SOLANA_RPC_URL?.trim() ||
-    "https://api.mainnet-beta.solana.com",
+  rpcUrl: rpcEndpoint(),
 
-  walletEncryptionKey: required("WALLET_ENCRYPTION_KEY"),
+  walletEncryptionKey: encryptionKey(),
 
   databasePath: defaultDatabasePath(),
 
