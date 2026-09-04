@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="PUMP AUTO">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a3d2c"/>
+      <stop offset="100%" stop-color="#0a1620"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#g)"/>
+  <rect x="6" y="6" width="116" height="116" rx="24" fill="none" stroke="#1f5c3d" stroke-width="2"/>
+  <!-- Bolt / pulse -->
+  <path d="M70 22 L42 70 H62 L54 106 L90 54 H68 Z" fill="#3dff9a"/>
+  <!-- Orbit ring -->
+  <circle cx="64" cy="64" r="46" fill="none" stroke="#3dff9a" stroke-opacity="0.25" stroke-width="2"/>
+  <circle cx="64" cy="18" r="4" fill="#3dff9a"/>
+</svg>

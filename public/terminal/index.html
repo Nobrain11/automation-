@@ -3,62 +3,64 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#070b10" />
-  <meta name="description" content="PUMP AUTO Solana trading terminal" />
+  <meta name="theme-color" content="#06090d" />
+  <meta name="description" content="PUMP AUTO — Solana trading terminal" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/logo.svg" />
   <title>PUMP AUTO — Terminal</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <div id="gate" class="gate">
-    <div class="gate-card">
-      <div class="brand-lockup"><span class="brand-mark">PA</span><span>PUMP AUTO</span></div>
-      <p class="eyebrow">SOLANA TRADING TERMINAL</p>
-      <h1>Connect from Telegram<br />to enter your workspace.</h1>
-      <p class="muted">Open Telegram and select <strong>WEB TERMINAL</strong>. Your secure login link expires in 10 minutes.</p>
-      <div class="gate-note"><span class="signal"></span> Real data only · No simulated balances</div>
+    <div class="card gate-card">
+      <img class="logo-img" src="/logo.svg" width="64" height="64" alt="PUMP AUTO" />
+      <div class="logo">⚡ PUMP AUTO</div>
+      <p class="gate-title">SOLANA TRADING TERMINAL</p>
+      <p class="muted">Open from Telegram → <b>WEB TERMINAL</b> to sign in.</p>
+      <p class="muted">Login link expires in 10 minutes. Real data only.</p>
     </div>
   </div>
 
   <div id="app" class="app hidden">
     <header class="topbar">
-      <button class="mobile-menu" type="button" data-go="menu" aria-label="Open menu">PA</button>
-      <div class="brand-lockup"><span class="brand-mark">PA</span><div><div class="brand-title">PUMP AUTO</div><div class="brand-sub">SOLANA TRADING TERMINAL</div></div></div>
-      <div class="top-metrics"><span id="solMetric">SOL —</span><span id="balMetric">BAL —</span><span id="huntMetric" class="status-dot">● CONNECTING</span></div>
+      <div class="brand">
+        <img class="logo-img sm" src="/logo.svg" width="28" height="28" alt="" />
+        <div>
+          <div class="brand-title">PUMP AUTO</div>
+          <div class="brand-sub">SOLANA TRADING TERMINAL</div>
+        </div>
+      </div>
+      <div class="top-metrics">
+        <span id="solMetric">SOL —</span>
+        <span id="balMetric">Bal —</span>
+        <span id="huntMetric" class="status-dot">● —</span>
+      </div>
     </header>
 
-    <div class="shell">
-      <aside class="sidebar" aria-label="Primary navigation">
-        <div class="side-head"><span class="brand-mark">PA</span><span>PUMP AUTO</span></div>
-        <div class="side-label">WORKSPACE</div>
-        <button type="button" data-tab="home" class="side-btn active"><span>Overview</span><kbd>01</kbd></button>
-        <button type="button" data-tab="trending" class="side-btn"><span>Trending</span><kbd>02</kbd></button>
-        <button type="button" data-tab="automation" class="side-btn"><span>Automation</span><kbd>03</kbd></button>
-        <button type="button" data-tab="trade" class="side-btn"><span>Trade</span><kbd>04</kbd></button>
-        <button type="button" data-tab="positions" class="side-btn"><span>Positions</span><kbd>05</kbd></button>
-        <div class="side-label side-label-lower">ACCOUNT</div>
-        <button type="button" data-tab="menu" class="side-btn"><span>Account & settings</span><kbd>⌘</kbd></button>
-        <div class="side-footer"><span class="signal"></span><span>SECURE SESSION</span></div>
-      </aside>
-      <main id="workspace" class="workspace"></main>
-      <aside class="context-rail" aria-label="System context">
-        <div class="rail-title">LIVE CONTEXT</div>
-        <div class="rail-card"><span class="signal"></span><div><b>SYSTEM STATUS</b><small>Connected to terminal</small></div></div>
-        <div class="rail-block"><span>NETWORK</span><b>Solana mainnet</b></div>
-        <div class="rail-block"><span>DATA SOURCE</span><b>pump.fun feeds</b></div>
-        <div class="rail-block"><span>REFRESH</span><b>Every 12 seconds</b></div>
-        <div class="rail-warning"><b>Trading carries risk.</b><span>Only trade what you can afford to lose.</span></div>
-      </aside>
-    </div>
+    <main id="workspace" class="workspace"></main>
 
-    <nav class="bottom-nav" aria-label="Primary navigation">
-      <button type="button" data-tab="home" class="nav-btn active"><span class="nav-ico">⌂</span><span>HOME</span></button>
-      <button type="button" data-tab="trending" class="nav-btn"><span class="nav-ico">↗</span><span>TRENDING</span></button>
-      <button type="button" data-tab="automation" class="nav-btn"><span class="nav-ico">◎</span><span>AUTO</span></button>
-      <button type="button" data-tab="trade" class="nav-btn"><span class="nav-ico">+</span><span>TRADE</span></button>
-      <button type="button" data-tab="positions" class="nav-btn"><span class="nav-ico">▥</span><span>POS</span></button>
-      <button type="button" data-tab="menu" class="nav-btn"><span class="nav-ico">≡</span><span>MENU</span></button>
+    <nav class="bottom-nav" aria-label="Primary">
+      <button type="button" data-tab="home" class="nav-btn active">
+        <span class="nav-ico">⌂</span><span>HOME</span>
+      </button>
+      <button type="button" data-tab="trending" class="nav-btn">
+        <span class="nav-ico">🔥</span><span>TRENDING</span>
+      </button>
+      <button type="button" data-tab="automation" class="nav-btn">
+        <span class="nav-ico">🤖</span><span>AUTO</span>
+      </button>
+      <button type="button" data-tab="trade" class="nav-btn">
+        <span class="nav-ico">⚡</span><span>TRADE</span>
+      </button>
+      <button type="button" data-tab="positions" class="nav-btn">
+        <span class="nav-ico">📊</span><span>POS</span>
+      </button>
+      <button type="button" data-tab="menu" class="nav-btn">
+        <span class="nav-ico">☰</span><span>MENU</span>
+      </button>
     </nav>
   </div>
+
   <script src="/app.js"></script>
 </body>
 </html>
