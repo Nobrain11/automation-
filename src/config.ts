@@ -22,7 +22,7 @@ function defaultDatabasePath(): string {
 }
 
 export const config = {
-  botToken: required("BOT_TOKEN"),
+  botToken: process.env.BOT_TOKEN?.trim() || required("TELEGRAM_BOT_TOKEN"),
 
   rpcUrl:
     process.env.SOLANA_RPC_URL?.trim() ||
