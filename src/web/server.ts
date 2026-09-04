@@ -24,6 +24,7 @@ import {
   emergencyStop,
   executeBuy,
   executeSell,
+  getTokenTerminal,
   patchSettings,
   startHunter,
   stopHunter
@@ -167,6 +168,14 @@ export function startWebServer(): void {
         const id = requireAuth(req, res);
         if (!id) return;
         sendJson(res, 200, await buildTrending());
+        return;
+      }
+
+      if (path === "/api/token" && req.method === "GET") {
+        const id = requireAuth(req, res);
+        if (!id) return;
+        const mint = url.searchParams.get("mint") || "";
+        sendJson(res, 200, await getTokenTerminal(id, mint));
         return;
       }
 

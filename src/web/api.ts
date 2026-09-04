@@ -13,6 +13,7 @@ import {
   sortBySpike,
   MarketToken
 } from "../services/market.js";
+import { buildTokenTerminal } from "../services/token-terminal.js";
 import { updateSetting } from "../services/settings.js";
 import { scanner } from "../scanner/scanner-instance.js";
 
@@ -43,6 +44,55 @@ function mapToken(t: any) {
     passed: Boolean(t.passed),
     reasons
   };
+}
+
+async function fetchSolPrice(): Promise<{
+  price: number | null;
+  change24h: number | null;
+}> {
+  try {
+    const res = await fetch("https://frontend-api-v3.pump.fun/sol-price", {
+      headers: {
+        Accept: "application/json",
+        Origin: "https://pump.fun",
+        Referer: "https://pump.fun/"
+      },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (res.ok) {
+      const data: any = await res.json();
+      const price = num(data?.solPrice ?? data?.price ?? data?.usd);
+      if (price != null) return { price, change24h: null };
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    const res = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=true",
+      { signal: AbortSignal.timeout(4000) }
+    );
+    if (!res.ok) return { price: null, change24h: null };
+    const data: any = await res.json();
+    return {
+      price: typeof data?.solana?.usd === "number" ? data.solana.usd : null,
+      change24h:
+        typeof data?.solana?.usd_24h_change === "number"
+          ? data.solana.usd_24h_change
+          : null
+    };
+  } catch {
+    return { price: null, change24h: null };
+  }
+}
+
+function num(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 export async function buildDashboard(telegramId: number) {
@@ -141,56 +191,6 @@ export async function buildDashboard(telegramId: number) {
   };
 }
 
-async function fetchSolPrice(): Promise<{
-  price: number | null;
-  change24h: number | null;
-}> {
-  try {
-    // prefer pump.fun sol price
-    const res = await fetch("https://frontend-api-v3.pump.fun/sol-price", {
-      headers: {
-        Accept: "application/json",
-        Origin: "https://pump.fun",
-        Referer: "https://pump.fun/"
-      },
-      signal: AbortSignal.timeout(4000)
-    });
-    if (res.ok) {
-      const data: any = await res.json();
-      const price = num(data?.solPrice ?? data?.price ?? data?.usd);
-      if (price != null) return { price, change24h: null };
-    }
-  } catch {
-    /* fall through */
-  }
-  try {
-    const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=true",
-      { signal: AbortSignal.timeout(4000) }
-    );
-    if (!res.ok) return { price: null, change24h: null };
-    const data: any = await res.json();
-    return {
-      price: typeof data?.solana?.usd === "number" ? data.solana.usd : null,
-      change24h:
-        typeof data?.solana?.usd_24h_change === "number"
-          ? data.solana.usd_24h_change
-          : null
-    };
-  } catch {
-    return { price: null, change24h: null };
-  }
-}
-
-function num(v: unknown): number | null {
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string" && v.trim() !== "") {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-
 export function buildActivity(limit = 40) {
   const stats = scanner.getStats();
   const tokens = getRecentTokens(limit).map(mapToken);
@@ -240,17 +240,14 @@ function mergeMarket(scannerRow: any, m: MarketToken | undefined) {
 
 export async function buildTrending() {
   const movers = await fetchPumpMovers();
-
   const recent = getRecentTokens(40).map(mapToken);
   const scanMints = recent.map((t) => t.mint).filter(Boolean);
   const enrichedScan = await enrichMints(scanMints);
   const byMint = new Map(enrichedScan.map((t) => [t.mint, t]));
-
   const newPairs = recent.map((t) => mergeMarket(t, byMint.get(t.mint)));
   const passed = recent
     .filter((t) => t.passed)
     .map((t) => mergeMarket(t, byMint.get(t.mint)));
-
   const list = movers.tokens;
 
   return {
@@ -265,7 +262,56 @@ export async function buildTrending() {
     newPairs,
     passed,
     source: movers.online ? "pump.fun" : "scanner-only",
-    note: "pump.fun top-runners + hot trades + new launches · micro-cap focus (~$5k–$25k)"
+    note: "pump.fun top-runners + hot trades + new launches · micro-cap focus"
+  };
+}
+
+export async function getTokenTerminal(
+  telegramId: number,
+  mint: string
+) {
+  const sol = await fetchSolPrice();
+  const detail = await buildTokenTerminal(mint, sol.price);
+  if (!detail.ok) return detail;
+
+  const positions = listOpenPositions(telegramId).filter(
+    (p) => p.mint === mint
+  );
+  const trades = listRecentTrades(telegramId, 50).filter(
+    (t) => t.mint === mint
+  );
+  const s = getSettings(telegramId);
+
+  return {
+    ...detail,
+    sol,
+    yourPosition: positions.length
+      ? {
+          open: true,
+          count: positions.length,
+          positions: positions.map((p) => ({
+            id: p.id,
+            entrySol: p.entry_sol,
+            signature: p.entry_signature,
+            symbol: p.symbol,
+            createdAt: p.created_at
+          }))
+        }
+      : { open: false, count: 0, positions: [] },
+    yourTrades: trades.map((t) => ({
+      side: t.side,
+      amountSol: t.amount_sol,
+      status: t.status,
+      signature: t.signature,
+      createdAt: t.created_at
+    })),
+    settings: {
+      maxBuy: s.max_buy,
+      slippage: s.slippage,
+      stopLoss: s.stop_loss,
+      trailingAfter: s.trailing_after,
+      trailingPullback: s.trailing_pullback
+    }
   };
 }
 
