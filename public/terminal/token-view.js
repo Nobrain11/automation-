@@ -1,4 +1,4 @@
-/** Token Terminal view — real data from /api/token */
+/** Token Terminal — /api/token + auto-hook ANALYZE buttons */
 
 function fmtUsdLocal(n) {
   if (n == null || Number.isNaN(Number(n))) return "—";
@@ -29,6 +29,17 @@ function checkMark(status) {
   return "?";
 }
 
+async function apiCall(path, opts) {
+  if (typeof window.api === "function") return window.api(path, opts);
+  const res = await fetch(path, {
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    ...opts
+  });
+  if (res.status === 401) throw new Error("unauthorized");
+  return res.json();
+}
+
 window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
   const ws = document.getElementById("workspace");
   if (!ws || !mint) return;
@@ -38,18 +49,18 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
 
   let data;
   try {
-    data = await window.api("/api/token?mint=" + encodeURIComponent(mint));
+    data = await apiCall("/api/token?mint=" + encodeURIComponent(mint));
   } catch (e) {
     ws.innerHTML = `<div class="panel"><div class="empty">Failed to load token</div>
       <button type="button" class="action" data-go="${backTab}">← Back</button></div>`;
-    window.bindWorkspaceEvents && window.bindWorkspaceEvents();
+    wireBack(ws);
     return;
   }
 
   if (!data || !data.ok) {
     ws.innerHTML = `<div class="panel"><div class="empty">${(data && data.error) || "Token not found"}</div>
       <button type="button" class="action" data-go="${backTab}">← Back</button></div>`;
-    window.bindWorkspaceEvents && window.bindWorkspaceEvents();
+    wireBack(ws);
     return;
   }
 
@@ -89,11 +100,10 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
   ws.innerHTML = `
     <div class="tt">
       <div class="tt-top">
-        <button type="button" class="action ghost tt-back" data-go="${backTab}">← Back</button>
+        <button type="button" class="action ghost" data-go="${backTab}">← Back</button>
         <div class="tt-brand">PUMP AUTO</div>
         <a class="action ghost" href="${t.pairUrl}" target="_blank" rel="noopener">pump.fun</a>
       </div>
-
       <div class="panel tt-head">
         <div class="tt-id">
           ${img}
@@ -109,7 +119,7 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
         </div>
         <div class="tt-price">
           <div class="px">${fmtUsdLocal(m.priceUsd)}</div>
-          <div class="muted">${m.priceSol != null ? m.priceSol.toExponential(3) + " SOL" : "Price from curve when available"}</div>
+          <div class="muted">${m.priceSol != null ? m.priceSol.toExponential(3) + " SOL" : "Curve price when available"}</div>
         </div>
         <div class="tt-ca">
           <code>${t.mint}</code>
@@ -117,12 +127,10 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
           <a class="action ghost" href="${t.explorerUrl}" target="_blank" rel="noopener">EXPLORER</a>
         </div>
       </div>
-
       <div class="panel">
         <h2>CHART</h2>
         <div class="empty">${data.chart?.note || "Chart data not available"}</div>
       </div>
-
       <div class="panel">
         <h2>MARKET</h2>
         <div class="tt-grid">
@@ -134,22 +142,18 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
           <div><span>FDV</span><b>${fmtUsdLocal(m.fdv)}</b></div>
         </div>
       </div>
-
       <div class="panel">
         <h2>TOKEN CHECKS</h2>
         <div class="tt-checks">${checksHtml}</div>
       </div>
-
       <div class="panel">
         <h2>HOLDERS</h2>
         <div class="empty">${data.holders?.note || "No holder data"}</div>
       </div>
-
       <div class="panel">
         <h2>TRANSACTIONS</h2>
         <div class="empty">${data.transactions?.note || "No transaction tape"}</div>
       </div>
-
       <div class="panel">
         <h2>AUTOMATION ANALYSIS</h2>
         <div class="tt-grid">
@@ -162,17 +166,17 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
           <button type="button" class="action" data-go="automation">OPEN AUTO-HUNTER</button>
         </div>
       </div>
-
       <div class="panel">
         <h2>YOUR POSITION</h2>
         ${posHtml}
       </div>
-
       <div class="tt-actions">
         <button type="button" class="action primary" id="ttBuy">BUY</button>
         <button type="button" class="action danger" id="ttSell" ${pos.open ? "" : "disabled"}>SELL</button>
       </div>
     </div>`;
+
+  wireBack(ws);
 
   document.getElementById("ttCopy")?.addEventListener("click", async () => {
     try {
@@ -192,7 +196,7 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
     const btn = document.getElementById("ttBuy");
     if (btn) btn.disabled = true;
     try {
-      const r = await window.api("/api/trade/buy", {
+      const r = await apiCall("/api/trade/buy", {
         method: "POST",
         body: JSON.stringify({ mint: t.mint, symbol: t.symbol })
       });
@@ -212,7 +216,7 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
     if (!first) return;
     if (!confirm("Sell 100% of this position?")) return;
     try {
-      const r = await window.api("/api/trade/sell", {
+      const r = await apiCall("/api/trade/sell", {
         method: "POST",
         body: JSON.stringify({ positionId: first.id })
       });
@@ -225,8 +229,6 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
     }
   });
 
-  window.bindWorkspaceEvents && window.bindWorkspaceEvents();
-  // sell buttons on positions
   ws.querySelectorAll(".sell-btn").forEach((btn) => {
     btn.onclick = async () => {
       const id = Number(btn.closest(".pos-card")?.dataset.id);
@@ -234,7 +236,7 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
       if (!confirm("Sell 100%?")) return;
       btn.disabled = true;
       try {
-        const r = await window.api("/api/trade/sell", {
+        const r = await apiCall("/api/trade/sell", {
           method: "POST",
           body: JSON.stringify({ positionId: id })
         });
@@ -250,3 +252,45 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
     };
   });
 };
+
+function wireBack(root) {
+  root.querySelectorAll("[data-go]").forEach((el) => {
+    el.onclick = () => {
+      const tab = el.getAttribute("data-go");
+      const btn = document.querySelector(`.nav-btn[data-tab="${tab}"]`);
+      if (btn) btn.click();
+    };
+  });
+}
+
+/** Hook ANALYZE / token heads after each render */
+function hookTokenButtons() {
+  document.querySelectorAll(".tok-analyze").forEach((btn) => {
+    if (btn.dataset.ttHooked) return;
+    btn.dataset.ttHooked = "1";
+    btn.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        const mint = btn.closest(".token")?.dataset.mint;
+        if (mint) openTokenTerminal(mint, { backTab: "trending" });
+      },
+      true
+    );
+  });
+  document.querySelectorAll(".token-head").forEach((head) => {
+    if (head.dataset.ttHooked) return;
+    head.dataset.ttHooked = "1";
+    head.style.cursor = "pointer";
+    head.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      const mint = head.closest(".token")?.dataset.mint;
+      if (mint) openTokenTerminal(mint, { backTab: "trending" });
+    });
+  });
+}
+
+setInterval(hookTokenButtons, 800);
+document.addEventListener("DOMContentLoaded", hookTokenButtons);
