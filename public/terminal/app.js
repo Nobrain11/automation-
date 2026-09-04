@@ -638,7 +638,7 @@ function bindWorkspaceEvents() {
 function setTab(tab) {
   state.tab = tab;
   if (tab !== "menu") state.menuView = null;
-  document.querySelectorAll(".nav-btn").forEach((b) => {
+  document.querySelectorAll(".nav-btn, .side-btn").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
   render();

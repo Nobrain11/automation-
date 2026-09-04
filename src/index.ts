@@ -48,11 +48,18 @@ async function main() {
       logger.error("Scanner failed to start (web + bot still running).", error)
     );
 
-  await bot.start({
-    onStart: () => {
-      logger.info("Telegram bot started.");
-    }
-  });
+  try {
+    await bot.start({
+      onStart: () => {
+        logger.info("Telegram bot started.");
+      }
+    });
+  } catch (error) {
+    logger.error(
+      "Telegram bot failed to start; web terminal remains available.",
+      error
+    );
+  }
 }
 
 async function shutdown(signal: string) {
