@@ -9,11 +9,18 @@
   <link rel="apple-touch-icon" href="/logo.svg" />
   <title>PUMP AUTO — Terminal</title>
   <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .logo-img { display: block; border-radius: 14px; flex-shrink: 0; }
+    .logo-img.sm { border-radius: 8px; width: 28px; height: 28px; }
+    .gate .logo-img { margin: 0 auto 14px; }
+    .gate .logo { text-align: center; font-weight: 800; font-size: 20px; letter-spacing: 0.04em; }
+    .gate .gate-title { text-align: center; font-size: 10px; letter-spacing: 0.14em; color: var(--muted); margin: 6px 0 14px; }
+  </style>
 </head>
 <body>
   <div id="gate" class="gate">
     <div class="card gate-card">
-      <img class="logo-img" src="/logo.svg" width="64" height="64" alt="PUMP AUTO" />
+      <img class="logo-img" src="/logo.svg" width="72" height="72" alt="PUMP AUTO" />
       <div class="logo">⚡ PUMP AUTO</div>
       <p class="gate-title">SOLANA TRADING TERMINAL</p>
       <p class="muted">Open from Telegram → <b>WEB TERMINAL</b> to sign in.</p>
