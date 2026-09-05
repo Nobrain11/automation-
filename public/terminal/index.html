@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/extra.css" />
   <link rel="stylesheet" href="/hunter.css" />
+  <link rel="stylesheet" href="/shell.css" />
 </head>
 <body>
   <div id="intro" class="intro hidden" aria-hidden="true">
@@ -33,6 +34,26 @@
 
   <div id="app" class="app hidden">
     <div class="desk-bg" aria-hidden="true"></div>
+
+    <aside class="side-nav" aria-label="Desktop navigation">
+      <div class="side-brand">
+        <img src="/logo.svg" width="28" height="28" alt="" style="border-radius:7px" />
+        <div>
+          <div class="title">PUMP <span>AUTO</span></div>
+          <div class="sub">TERMINAL</div>
+        </div>
+      </div>
+      <button type="button" class="side-btn active" data-tab="home"><span class="ico">⌂</span>HOME</button>
+      <button type="button" class="side-btn" data-tab="trending"><span class="ico">↗</span>SCANNER</button>
+      <button type="button" class="side-btn" data-tab="trade"><span class="ico">▣</span>TERMINAL</button>
+      <button type="button" class="side-btn" data-tab="positions"><span class="ico">◫</span>POSITIONS</button>
+      <button type="button" class="side-btn" data-tab="automation"><span class="ico">◎</span>AUTO</button>
+      <button type="button" class="side-btn" data-tab="menu"><span class="ico">▤</span>PORTFOLIO</button>
+      <div class="side-spacer"></div>
+      <button type="button" class="side-btn" data-tab="menu" data-menu="risk"><span class="ico">⚙</span>SETTINGS</button>
+      <div class="side-foot">PHASE 1 · CORE</div>
+    </aside>
+
     <header class="topbar">
       <div class="brand">
         <img class="logo-img sm" src="/logo.svg" width="26" height="26" alt="" />
@@ -63,5 +84,6 @@
   <script src="/app.js"></script>
   <script src="/card-metrics.js"></script>
   <script src="/token-view.js"></script>
+  <script src="/shell-nav.js"></script>
 </body>
 </html>
