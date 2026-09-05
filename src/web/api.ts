@@ -14,6 +14,7 @@ import {
   MarketToken
 } from "../services/market.js";
 import { buildTokenTerminal } from "../services/token-terminal.js";
+import { buildFilterMilestones } from "../scanner/filters.js";
 import { updateSetting } from "../services/settings.js";
 import { scanner } from "../scanner/scanner-instance.js";
 
@@ -27,22 +28,61 @@ function mapToken(t: any) {
   } catch {
     reasons = [];
   }
+
+  const isBondingCurve = Boolean(t.is_bonding_curve ?? t.isBondingCurve);
+  const mintAuthorityRevoked = Boolean(
+    t.mint_authority_revoked ?? t.mintAuthorityRevoked
+  );
+  const freezeAuthorityRevoked = Boolean(
+    t.freeze_authority_revoked ?? t.freezeAuthorityRevoked
+  );
+  const ageSeconds = t.age_seconds ?? t.ageSeconds ?? null;
+  const curveLiquiditySol = t.curve_liquidity_sol ?? t.curveLiquiditySol ?? null;
+  const top10Percent = t.top10_percent ?? t.top10Percent ?? null;
+  const volume1mUsd = t.volume_1m_usd ?? t.volume1mUsd ?? null;
+  const creatorDumping = Boolean(t.creator_dumping ?? t.creatorDumping);
+  const smartMoneyOverride = Boolean(
+    t.smart_money_override ?? t.smartMoneyOverride
+  );
+
+  const milestones = buildFilterMilestones({
+    isBondingCurve,
+    mintAuthorityRevoked,
+    freezeAuthorityRevoked,
+    ageSeconds: ageSeconds ?? undefined,
+    curveLiquiditySol,
+    top10Percent,
+    volume1mUsd,
+    creatorDumping,
+    smartMoneyOverride
+  });
+
+  const passCount = milestones.filter((m) => m.status === "pass").length;
+  const failCount = milestones.filter((m) => m.status === "fail").length;
+
   return {
     mint: t.mint,
     name: t.name,
     symbol: t.symbol,
     creator: t.creator,
     discoveredAt: t.discovered_at ?? t.discoveredAt,
-    ageSeconds: t.age_seconds ?? t.ageSeconds,
-    isBondingCurve: Boolean(t.is_bonding_curve ?? t.isBondingCurve),
-    mintRevoked: Boolean(t.mint_authority_revoked ?? t.mintAuthorityRevoked),
-    freezeRevoked: Boolean(
-      t.freeze_authority_revoked ?? t.freezeAuthorityRevoked
-    ),
-    top10: t.top10_percent ?? t.top10Percent ?? null,
-    liquiditySol: t.curve_liquidity_sol ?? t.curveLiquiditySol ?? null,
+    ageSeconds,
+    isBondingCurve,
+    mintRevoked: mintAuthorityRevoked,
+    freezeRevoked: freezeAuthorityRevoked,
+    top10: top10Percent,
+    liquiditySol: curveLiquiditySol,
+    volume1mUsd,
+    creatorDumping,
+    smartMoneyOverride,
     passed: Boolean(t.passed),
-    reasons
+    reasons,
+    milestones,
+    milestoneSummary: {
+      pass: passCount,
+      fail: failCount,
+      total: milestones.length
+    }
   };
 }
 
@@ -282,9 +322,16 @@ export async function getTokenTerminal(
   );
   const s = getSettings(telegramId);
 
+  // Attach scanner filter milestones if this mint was evaluated
+  const scanned = getRecentTokens(200).find((row: any) => row.mint === mint);
+  const filterTrail = scanned ? mapToken(scanned) : null;
+
   return {
     ...detail,
     sol,
+    filterMilestones: filterTrail?.milestones ?? null,
+    filterSummary: filterTrail?.milestoneSummary ?? null,
+    scannerPassed: filterTrail ? Boolean(filterTrail.passed) : null,
     yourPosition: positions.length
       ? {
           open: true,
