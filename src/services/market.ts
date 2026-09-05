@@ -259,6 +259,79 @@ async function pumpGet(path: string): Promise<any> {
   return res.json();
 }
 
+async function dexGet(path: string): Promise<any> {
+  const res = await fetch(`https://api.dexscreener.com${path}`, {
+    headers: { Accept: "application/json", "User-Agent": HEADERS["User-Agent"] },
+    signal: AbortSignal.timeout(8000)
+  });
+  if (!res.ok) throw new Error(`dex ${res.status} ${path}`);
+  return res.json();
+}
+
+async function fetchDexFallback(): Promise<MarketToken[]> {
+  const profiles = await dexGet("/token-profiles/latest/v1");
+  const addresses = (Array.isArray(profiles) ? profiles : [])
+    .filter((p: any) => p?.chainId === "solana" && typeof p.tokenAddress === "string")
+    .map((p: any) => p.tokenAddress)
+    .slice(0, 30);
+  if (!addresses.length) return [];
+
+  const pairs = await dexGet(`/tokens/v1/solana/${addresses.join(",")}`);
+  const best = new Map<string, any>();
+  for (const pair of Array.isArray(pairs) ? pairs : []) {
+    if (pair?.baseToken?.address && pair.dexId === "pumpfun") {
+      const current = best.get(pair.baseToken.address);
+      if (!current || Number(pair.liquidity?.usd || 0) > Number(current.liquidity?.usd || 0)) {
+        best.set(pair.baseToken.address, pair);
+      }
+    }
+  }
+  return [...best.values()].map((pair: any) => {
+    const base = pair.baseToken;
+    const liquidity = num(pair.liquidity?.usd);
+    const marketCap = num(pair.marketCap) ?? num(pair.fdv);
+    const change5m = num(pair.priceChange?.m5);
+    const change1h = num(pair.priceChange?.h1);
+    const change24h = num(pair.priceChange?.h24);
+    const token: MarketToken = {
+      mint: base.address,
+      name: base.name ?? null,
+      symbol: base.symbol ?? null,
+      imageUrl: null,
+      description: null,
+      priceUsd: num(pair.priceUsd),
+      priceChange24h: change24h,
+      priceChange5m: change5m,
+      priceChange1h: change1h,
+      liquidityUsd: liquidity,
+      volume24h: num(pair.volume?.h24),
+      volume1h: num(pair.volume?.h1),
+      marketCap,
+      fdv: num(pair.fdv),
+      pairUrl: pair.url ?? `https://pump.fun/coin/${base.address}`,
+      dexId: "pump.fun",
+      pairCreatedAt: num(pair.pairCreatedAt),
+      boosts: num(pair.boosts?.active),
+      txnsBuys24h: num(pair.txns?.h24?.buys),
+      txnsSells24h: num(pair.txns?.h24?.sells),
+      website: null,
+      twitter: null,
+      telegram: null,
+      isPump: true,
+      review: null,
+      source: "dexscreener",
+      spikeScore: (change5m ?? 0) * 2 + (change1h ?? 0) + Math.min(20, (num(pair.volume?.h1) ?? 0) / 1000)
+    };
+    token.review = buildReview({
+      usd_market_cap: marketCap,
+      created_timestamp: token.pairCreatedAt,
+      complete: false,
+      reply_count: 0
+    }, marketCap);
+    return token;
+  });
+}
+
 function normalizeList(data: any): any[] {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.coins)) return data.coins;
@@ -308,6 +381,19 @@ export async function fetchPumpMovers(): Promise<{
     }
 
     let tokens = [...byMint.values()];
+
+    if (tokens.length === 0) {
+      try {
+        const fallback = await fetchDexFallback();
+        if (fallback.length > 0) {
+          cacheMovers = { at: Date.now(), tokens: fallback.slice(0, 40) };
+          logger.info(`market fallback: ${fallback.length} pump.fun pairs from DexScreener`);
+          return { online: true, tokens: cacheMovers.tokens };
+        }
+      } catch (fallbackError) {
+        logger.warn("market fallback failed", fallbackError);
+      }
+    }
 
     // Prefer micro-cap band (what you asked for)
     const micro = tokens.filter((t) => {
