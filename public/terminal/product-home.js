@@ -1,4 +1,4 @@
-/** Product home + portfolio/settings layout (real data only) */
+/** Product home — command center (includes Auto-Hunter controls) */
 
 function renderHome(d) {
   window.__lastDash = d;
@@ -16,7 +16,6 @@ function renderHome(d) {
   const huntLabel = huntOn ? "ON" : h.killSwitch ? "KILLED" : "OFF";
   const pnlNote = d.pnl?.note || "No closed PnL yet";
 
-  const wallets = d.wallets || [];
   const walletBlock = d.wallet?.connected
     ? `<div class="panel ah-wallet">
         <div class="ah-wallet-top">
@@ -29,56 +28,49 @@ function renderHome(d) {
         </div>
         <div class="ah-stats">
           <div><span>POSITIONS</span><b>${posCount}</b></div>
-          <div><span>TODAY PnL</span><b>${d.pnl?.todaySol != null ? (d.pnl.todaySol >= 0 ? "+" : "") + d.pnl.todaySol.toFixed(3) + " SOL" : "—"}</b></div>
-          <div><span>SCANNER</span><b>${sc.running ? "LIVE" : "OFF"}</b></div>
+          <div><span>PASSED</span><b>${sc.passed ?? 0}</b></div>
+          <div><span>SCAN</span><b>${sc.running ? "LIVE" : "OFF"}</b></div>
         </div>
       </div>`
     : `<div class="panel">
         <h1>AUTO-HUNTER</h1>
-        <p class="muted">Connect a wallet in Telegram to trade.</p>
-        <div class="empty">No wallet linked to this session</div>
+        <div class="empty">No wallet — create/import in Telegram</div>
       </div>`;
 
   const autoBtn = huntOn
     ? `<button type="button" class="action danger full" id="btnHomeStopHunt">STOP HUNTING</button>`
     : `<button type="button" class="action primary full" id="btnHomeStartHunt">🟢 START HUNTING</button>`;
 
+  const killBtn = h.killSwitch
+    ? `<button type="button" class="action" id="btnClearKill">CLEAR KILL</button>`
+    : `<button type="button" class="action danger" id="btnEmergency">EMERGENCY STOP</button>`;
+
   return `
     <div class="ah-hero panel">
-      <div class="ah-hero-title">AUTO-HUNTER</div>
-      <div class="ah-hero-sub">Intelligent Solana trading, built for speed.</div>
-      <div class="ah-hero-lines muted">
-        Find opportunities · Analyze risk · Execute trades · Manage positions
-      </div>
+      <div class="ah-hero-title">COMMAND</div>
+      <div class="ah-hero-sub">Discover · Trade · Manage positions</div>
+      <div class="ah-hero-lines muted">${pnlNote}</div>
     </div>
     ${walletBlock}
     <div class="panel">
+      <h2>AUTO-HUNTER</h2>
       ${autoBtn}
-      <div class="ah-grid">
-        <button type="button" class="action" data-go="trending">🔎 SCANNER</button>
-        <button type="button" class="action" data-go="trade">⚡ TERMINAL</button>
-        <button type="button" class="action" data-go="positions">📊 POSITIONS</button>
-        <button type="button" class="action" data-go="menu">▤ PORTFOLIO</button>
-        <button type="button" class="action" data-menu="wallet">👛 WALLETS</button>
-        <button type="button" class="action" data-menu="risk">⚙️ SETTINGS</button>
+      <div class="row" style="margin-top:8px">${killBtn}</div>
+      <div class="ws-meta" style="margin-top:10px">Max ${s.maxBuy ?? "—"} SOL · SL ${s.stopLoss ?? "—"}% · Trail ${s.trailingAfter ?? "—"}%
+${s.maxTradesHour ?? "—"}/hr · ${s.maxTradesDay ?? "—"}/day · Cap ${s.dailyLossCap ?? "—"} SOL</div>
+    </div>
+    <div class="panel">
+      <h2>GO</h2>
+      <div class="ah-grid lean-3">
+        <button type="button" class="action" data-go="trending">🔎 SCAN</button>
+        <button type="button" class="action" data-go="trade">⚡ TRADE</button>
+        <button type="button" class="action" data-go="positions">📊 POS</button>
       </div>
-    </div>
-    <div class="panel">
-      <h2>LIMITS</h2>
-      <div class="ws-meta">Max buy ${s.maxBuy ?? "—"} SOL · Slippage ${s.slippage ?? "—"}%
-SL ${s.stopLoss ?? "—"}% · Trail after ${s.trailingAfter ?? "—"}%
-Daily cap ${s.dailyLossCap ?? "—"} SOL · ${s.maxTradesHour ?? "—"}/hr · ${s.maxTradesDay ?? "—"}/day</div>
-    </div>
-    <div class="panel">
-      <h2>SMART DEV FOLLOW</h2>
-      <div class="empty">Not configured — no developer follows yet</div>
-      <p class="muted" style="margin-top:8px">Phase 2 feature. Will use real tracked wallets only.</p>
-    </div>
-    <div class="panel">
-      <h2>STATUS</h2>
-      <div class="ws-meta">${pnlNote}
-HTTP discovery active when service is healthy.
-${wallets.length ? wallets.length + " wallet(s) on account" : ""}</div>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="action ghost" data-menu="risk">⚙ SETTINGS</button>
+        <button type="button" class="action ghost" data-menu="activity">ACTIVITY</button>
+        <button type="button" class="action ghost" data-menu="wallet">WALLETS</button>
+      </div>
     </div>`;
 }
 
@@ -98,41 +90,7 @@ function renderMenu(d) {
           .join("")
       : `<div class="empty">No wallets — create/import in Telegram</div>`;
     return `<div class="panel"><h1>MY WALLETS</h1>${lines}
-      <p class="muted">Add or switch wallets in Telegram → Wallet menu.</p>
-      <button type="button" class="action ghost" data-menu-back>← Back</button></div>`;
-  }
-  if (state.menuView === "status") {
-    const sc = d.scanner || {};
-    return `<div class="panel"><h1>STATUS</h1><div class="ws-meta">${hunterLabel(d.hunter)}
-Scanner ${sc.running ? "LIVE" : "OFF"}
-Disc ${sc.discovered ?? 0} · Pass ${sc.passed ?? 0}</div>
-      <button type="button" class="action ghost" data-menu-back>← Back</button></div>`;
-  }
-  if (state.menuView === "pnl") {
-    return `<div class="panel"><h1>PNL</h1><div class="ws-meta">${d.pnl?.note || "No data"}</div>
-      <button type="button" class="action ghost" data-menu-back>← Back</button></div>`;
-  }
-  if (state.menuView === "risk" || state.menuView === "settings") {
-    const s = d.settings || {};
-    return `<div class="panel"><h1>SETTINGS</h1>
-      <h2>Trading</h2>
-      <div class="ws-meta">Default size ${s.maxBuy ?? "—"} SOL
-Slippage ${s.slippage ?? "—"}%
-Stop loss ${s.stopLoss ?? "—"}%
-Daily loss limit ${s.dailyLossCap ?? "—"} SOL
-Max trades ${s.maxTradesHour ?? "—"}/hr · ${s.maxTradesDay ?? "—"}/day</div>
-      <h2>Automation</h2>
-      <div class="ws-meta">Auto-Hunter ${d.hunter?.state === "hunting" ? "ON" : "OFF"}
-Trailing after ${s.trailingAfter ?? "—"}% · pullback ${s.trailingPullback ?? "—"}%
-Time stop ${s.timeStopMinutes ?? "—"} min
-Smart money boost ${s.smartMoneyBoost ? "ON" : "OFF"}</div>
-      <h2>Security</h2>
-      <div class="ws-meta">Emergency stop ${d.hunter?.killSwitch ? "ACTIVE" : "READY"}
-Keys encrypted at rest · never logged in plaintext</div>
-      <div class="row">
-        <button type="button" class="action" data-go="trade">Edit trade defaults</button>
-        <button type="button" class="action ghost" data-menu-back>← Back</button>
-      </div></div>`;
+      <button type="button" class="action ghost" data-go="home">← Home</button></div>`;
   }
   if (state.menuView === "activity") {
     const trades = d.trades || [];
@@ -146,38 +104,37 @@ Keys encrypted at rest · never logged in plaintext</div>
           .join("")
       : `<div class="empty">No activity</div>`;
     return `<div class="panel"><h1>ACTIVITY</h1>${lines}
-      <button type="button" class="action ghost" data-menu-back>← Back</button></div>`;
+      <button type="button" class="action ghost" data-go="home">← Home</button></div>`;
   }
-  if (state.menuView === "learn") {
-    return `<div class="panel"><h1>LEARN HOW IT WORKS</h1>
-      <p class="muted">1. Connect wallet in Telegram<br/>2. Set risk limits<br/>3. Start hunter or trade manually<br/>4. Monitor positions · auto exits use TP/SL/trail/time</p>
-      <button type="button" class="action ghost" data-menu-back>← Back</button></div>`;
+  if (state.menuView === "risk" || state.menuView === "settings") {
+    const s = d.settings || {};
+    return `<div class="panel"><h1>SETTINGS</h1>
+      <h2>Trading</h2>
+      <div class="ws-meta">Size ${s.maxBuy ?? "—"} SOL · Slip ${s.slippage ?? "—"}%
+SL ${s.stopLoss ?? "—"}% · Cap ${s.dailyLossCap ?? "—"} SOL
+Trades ${s.maxTradesHour ?? "—"}/hr · ${s.maxTradesDay ?? "—"}/day</div>
+      <h2>Automation</h2>
+      <div class="ws-meta">Hunter ${d.hunter?.state === "hunting" ? "ON" : "OFF"}
+Trail ${s.trailingAfter ?? "—"}% / ${s.trailingPullback ?? "—"}%
+Time stop ${s.timeStopMinutes ?? "—"} min</div>
+      <h2>Security</h2>
+      <div class="ws-meta">Kill ${d.hunter?.killSwitch ? "ACTIVE" : "READY"}</div>
+      <div class="row" style="margin-top:12px">
+        <button type="button" class="action" data-go="trade">Edit sizes in Trade</button>
+        <button type="button" class="action ghost" data-go="home">← Home</button>
+      </div></div>`;
   }
-  if (state.menuView === "referral") {
-    const r = d.referral;
-    return `<div class="panel"><h1>REFERRAL</h1><div class="ws-meta">${r ? `Code ${r.code}\nReferred ${r.referredCount}\nEarned ${r.totalEarnedSol} SOL` : "Not configured"}</div>
-      <button type="button" class="action ghost" data-menu-back>← Back</button></div>`;
+  if (state.menuView === "pnl") {
+    return `<div class="panel"><h1>PNL</h1><div class="ws-meta">${d.pnl?.note || "No data"}</div>
+      <button type="button" class="action ghost" data-go="home">← Home</button></div>`;
   }
-  if (state.menuView === "support") {
-    return `<div class="panel"><h1>SUPPORT</h1><p class="muted">Use Telegram for wallet export. Never share private keys.</p>
-      <button type="button" class="action ghost" data-menu-back>← Back</button></div>`;
-  }
-  if (state.menuView === "dev") {
-    return `<div class="panel"><h1>SMART DEV FOLLOW</h1>
-      <div class="empty">Not configured</div>
-      <p class="muted">No mock developers. This ships when real wallet tracking is enabled.</p>
-      <button type="button" class="action ghost" data-menu-back>← Back</button></div>`;
-  }
-
-  return `<div class="panel"><h1>PORTFOLIO</h1>
+  // default portfolio
+  return `<div class="panel"><h1>MORE</h1>
     <div class="menu-list">
-      <button type="button" class="action" data-menu="wallet">My Wallets</button>
-      <button type="button" class="action" data-menu="pnl">PnL</button>
-      <button type="button" class="action" data-menu="activity">Activity</button>
       <button type="button" class="action" data-menu="risk">Settings</button>
-      <button type="button" class="action" data-menu="dev">Smart Dev Follow</button>
-      <button type="button" class="action" data-menu="learn">Learn</button>
-      <button type="button" class="action" data-menu="referral">Referral</button>
-      <button type="button" class="action" data-menu="support">Support</button>
+      <button type="button" class="action" data-menu="wallet">Wallets</button>
+      <button type="button" class="action" data-menu="activity">Activity</button>
+      <button type="button" class="action" data-menu="pnl">PnL</button>
+      <button type="button" class="action ghost" data-go="home">← Home</button>
     </div></div>`;
 }

@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="/product.css" />
   <link rel="stylesheet" href="/funnel.css" />
   <link rel="stylesheet" href="/nav-polish.css" />
+  <link rel="stylesheet" href="/nav-lean.css" />
 </head>
 <body>
   <div id="intro" class="intro hidden" aria-hidden="true">
@@ -49,20 +50,18 @@
       </div>
       <button type="button" class="side-btn active" data-tab="home"><span class="ico">⌂</span>HOME</button>
       <button type="button" class="side-btn" data-tab="trending"><span class="ico">↗</span>SCANNER</button>
-      <button type="button" class="side-btn" data-tab="trade"><span class="ico">▣</span>TERMINAL</button>
+      <button type="button" class="side-btn" data-tab="trade"><span class="ico">▣</span>TRADE</button>
       <button type="button" class="side-btn" data-tab="positions"><span class="ico">◫</span>POSITIONS</button>
-      <button type="button" class="side-btn" data-tab="automation"><span class="ico">◎</span>AUTO</button>
-      <button type="button" class="side-btn" data-tab="menu"><span class="ico">▤</span>PORTFOLIO</button>
       <div class="side-spacer"></div>
       <button type="button" class="side-btn" data-tab="menu" data-menu="risk"><span class="ico">⚙</span>SETTINGS</button>
-      <div class="side-foot">PHASE 1 · CORE</div>
+      <div class="side-foot">LEAN DESK</div>
     </aside>
 
     <header class="topbar">
       <div class="brand">
         <img class="logo-img sm" src="/logo.svg" width="26" height="26" alt="" />
         <div>
-          <div class="brand-title">PUMP <span class="accent" style="color:#2ef2a0">AUTO</span></div>
+          <div class="brand-title">PUMP <span style="color:#2ef2a0">AUTO</span></div>
           <div class="brand-sub">TERMINAL</div>
         </div>
       </div>
@@ -70,18 +69,18 @@
         <span id="solMetric">SOL —</span>
         <span id="balMetric">BAL —</span>
         <span id="huntMetric" class="status-dot">● —</span>
+        <button type="button" class="top-gear" id="btnTopSettings" title="Settings">⚙</button>
       </div>
     </header>
 
     <main id="workspace" class="workspace"></main>
 
-    <nav class="bottom-nav" aria-label="Primary">
+    <!-- 4 primary surfaces only -->
+    <nav class="bottom-nav lean" aria-label="Primary">
       <button type="button" data-tab="home" class="nav-btn active"><span class="nav-ico">⌂</span><span>HOME</span></button>
       <button type="button" data-tab="trending" class="nav-btn"><span class="nav-ico">↗</span><span>SCAN</span></button>
-      <button type="button" data-tab="trade" class="nav-btn"><span class="nav-ico">▣</span><span>TERM</span></button>
+      <button type="button" data-tab="trade" class="nav-btn"><span class="nav-ico">▣</span><span>TRADE</span></button>
       <button type="button" data-tab="positions" class="nav-btn"><span class="nav-ico">◫</span><span>POS</span></button>
-      <button type="button" data-tab="automation" class="nav-btn"><span class="nav-ico">◎</span><span>AUTO</span></button>
-      <button type="button" data-tab="menu" class="nav-btn"><span class="nav-ico">≡</span><span>PORT</span></button>
     </nav>
   </div>
 
@@ -93,5 +92,6 @@
   <script src="/shell-nav.js"></script>
   <script src="/funnel.js"></script>
   <script src="/nav-fix.js"></script>
+  <script src="/nav-lean.js"></script>
 </body>
 </html>
