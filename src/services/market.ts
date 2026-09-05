@@ -44,11 +44,13 @@ export interface MarketToken {
 }
 
 const MCAP_MIN = 2_000;
-const MCAP_MAX = 100_000; // early pump zone — not millions
-const PREFERRED_MAX = 25_000; // classic ~10k–15k spikes
+const MCAP_MAX = 100_000;
+const PREFERRED_MAX = 25_000;
 
 let cacheMovers: { at: number; tokens: MarketToken[] } | null = null;
-const CACHE_MS = 15_000;
+const CACHE_MS = 12_000;
+
+let solUsdCache: { at: number; price: number } | null = null;
 
 const HEADERS: Record<string, string> = {
   Accept: "application/json",
@@ -76,17 +78,12 @@ function gradeFromScore(score: number): TokenReview["grade"] {
 }
 
 function usdMcap(coin: any): number | null {
-  return (
-    num(coin?.usd_market_cap) ??
-    num(coin?.market_cap_usd) ??
-    null
-  );
+  return num(coin?.usd_market_cap) ?? num(coin?.market_cap_usd) ?? null;
 }
 
 function createdMs(coin: any): number | null {
   const t = num(coin?.created_timestamp);
   if (t == null) return null;
-  // pump sometimes sends seconds
   return t < 1e12 ? t * 1000 : t;
 }
 
@@ -94,6 +91,29 @@ function lastTradeMs(coin: any): number | null {
   const t = num(coin?.last_trade_timestamp);
   if (t == null) return null;
   return t < 1e12 ? t * 1000 : t;
+}
+
+async function getSolUsd(): Promise<number> {
+  if (solUsdCache && Date.now() - solUsdCache.at < 60_000) {
+    return solUsdCache.price;
+  }
+  try {
+    const res = await fetch("https://frontend-api-v3.pump.fun/sol-price", {
+      headers: HEADERS,
+      signal: AbortSignal.timeout(4000)
+    });
+    if (res.ok) {
+      const data: any = await res.json();
+      const p = num(data?.solPrice ?? data?.price ?? data?.usd);
+      if (p != null && p > 0) {
+        solUsdCache = { at: Date.now(), price: p };
+        return p;
+      }
+    }
+  } catch {
+    /* fallthrough */
+  }
+  return solUsdCache?.price ?? 150;
 }
 
 function buildReview(coin: any, mcap: number | null): TokenReview {
@@ -198,7 +218,7 @@ function spikeScore(coin: any, mcap: number | null): number {
   return s;
 }
 
-function mapPumpCoin(raw: any, sourceTag = "pump.fun"): MarketToken | null {
+function mapPumpCoin(raw: any, solUsd: number): MarketToken | null {
   const coin = raw?.coin && typeof raw.coin === "object" ? raw.coin : raw;
   const mint = coin?.mint;
   if (!mint || typeof mint !== "string") return null;
@@ -206,23 +226,52 @@ function mapPumpCoin(raw: any, sourceTag = "pump.fun"): MarketToken | null {
 
   const mcap = usdMcap(coin);
   const created = createdMs(coin);
-  const virtualSol = num(coin?.virtual_sol_reserves);
-  // reserves are lamports-ish (9 decimals for SOL)
-  const liqApprox =
-    virtualSol != null ? (virtualSol / 1e9) * 2 * 150 : null; // rough USD using ~$150 SOL — better than nothing
+
+  const vSol = num(coin?.virtual_sol_reserves);
+  const vTok = num(coin?.virtual_token_reserves);
+  const realSol = num(coin?.real_sol_reserves);
+  const decimals = num(coin?.base_decimals) ?? 6;
+
+  let priceUsd: number | null = null;
+  if (vSol != null && vTok != null && vTok > 0) {
+    const priceSol = vSol / 1e9 / (vTok / 10 ** decimals);
+    if (Number.isFinite(priceSol) && priceSol > 0) {
+      priceUsd = priceSol * solUsd;
+    }
+  }
+
+  const solReserves =
+    realSol != null && realSol > 0
+      ? realSol / 1e9
+      : vSol != null
+        ? vSol / 1e9
+        : null;
+  const liquidityUsd =
+    solReserves != null ? solReserves * 2 * solUsd : null;
+
+  // Engagement proxy as activity signal when true volume API is unavailable
+  const replies = num(coin?.reply_count) ?? 0;
+  const volumeProxy =
+    mcap != null && replies > 0
+      ? Math.min(mcap * 2, replies * 80)
+      : replies > 0
+        ? replies * 80
+        : null;
 
   const token: MarketToken = {
     mint,
     name: coin?.name ?? null,
     symbol: coin?.symbol ?? null,
     imageUrl: coin?.image_uri ?? null,
-    description: (raw?.description || coin?.description || null) as string | null,
-    priceUsd: null,
+    description: (raw?.description || coin?.description || null) as
+      | string
+      | null,
+    priceUsd,
     priceChange24h: null,
     priceChange5m: null,
     priceChange1h: null,
-    liquidityUsd: liqApprox,
-    volume24h: null,
+    liquidityUsd,
+    volume24h: volumeProxy,
     volume1h: null,
     marketCap: mcap,
     fdv: mcap,
@@ -240,7 +289,7 @@ function mapPumpCoin(raw: any, sourceTag = "pump.fun"): MarketToken | null {
     source: "pump.fun",
     spikeScore: spikeScore(coin, mcap),
     complete: Boolean(coin?.complete),
-    replyCount: num(coin?.reply_count)
+    replyCount: replies
   };
   return token;
 }
@@ -266,10 +315,6 @@ function normalizeList(data: any): any[] {
   return [];
 }
 
-/**
- * Real pump.fun movers — top runners + recently traded + new launches.
- * Filtered toward micro-caps (~$5k–$25k), not million-dollar names.
- */
 export async function fetchPumpMovers(): Promise<{
   online: boolean;
   tokens: MarketToken[];
@@ -281,6 +326,7 @@ export async function fetchPumpMovers(): Promise<{
 
   const started = Date.now();
   try {
+    const solUsd = await getSolUsd();
     const results = await Promise.allSettled([
       pumpGet("/coins/top-runners"),
       pumpGet(
@@ -299,7 +345,7 @@ export async function fetchPumpMovers(): Promise<{
 
     const byMint = new Map<string, MarketToken>();
     for (const raw of allRaw) {
-      const t = mapPumpCoin(raw);
+      const t = mapPumpCoin(raw, solUsd);
       if (!t) continue;
       const prev = byMint.get(t.mint);
       if (!prev || (t.spikeScore || 0) > (prev.spikeScore || 0)) {
@@ -309,7 +355,6 @@ export async function fetchPumpMovers(): Promise<{
 
     let tokens = [...byMint.values()];
 
-    // Prefer micro-cap band (what you asked for)
     const micro = tokens.filter((t) => {
       const m = t.marketCap;
       return m != null && m >= MCAP_MIN && m <= MCAP_MAX;
@@ -318,7 +363,6 @@ export async function fetchPumpMovers(): Promise<{
     if (micro.length >= 5) tokens = micro;
 
     tokens.sort((a, b) => {
-      // prefer ~10k–15k
       const score = (t: MarketToken) => {
         const m = t.marketCap ?? 0;
         let s = t.spikeScore || 0;
@@ -344,26 +388,25 @@ export async function fetchPumpMovers(): Promise<{
   }
 }
 
-/** Kept for API compatibility — also pump.fun only */
 export async function fetchBoostedSolana(): Promise<{
   online: boolean;
   tokens: MarketToken[];
   error?: string;
 }> {
-  const movers = await fetchPumpMovers();
-  return movers;
+  return fetchPumpMovers();
 }
 
 export async function enrichMints(mints: string[]): Promise<MarketToken[]> {
   const unique = [...new Set(mints.filter(Boolean))].slice(0, 20);
   if (!unique.length) return [];
+  const solUsd = await getSolUsd();
   const out: MarketToken[] = [];
 
   await Promise.all(
     unique.map(async (mint) => {
       try {
         const data = await pumpGet(`/coins/${mint}`);
-        const mapped = mapPumpCoin(data);
+        const mapped = mapPumpCoin(data, solUsd);
         if (mapped) out.push(mapped);
       } catch {
         // ignore single failures
@@ -376,7 +419,7 @@ export async function enrichMints(mints: string[]): Promise<MarketToken[]> {
 
 export function sortByVolume(tokens: MarketToken[]): MarketToken[] {
   return [...tokens].sort(
-    (a, b) => (b.replyCount || 0) - (a.replyCount || 0)
+    (a, b) => (b.volume24h || 0) - (a.volume24h || 0)
   );
 }
 export function sortByChange(tokens: MarketToken[]): MarketToken[] {

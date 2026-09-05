@@ -13,6 +13,41 @@ import {
 import { logger } from "./utils/logger.js";
 import { startWebServer } from "./web/server.js";
 
+async function startTelegramSafely() {
+  // Clear any leftover webhook so long-polling is the only consumer
+  try {
+    await bot.api.deleteWebhook({ drop_pending_updates: true });
+    logger.info("Telegram webhook cleared (long-polling mode).");
+  } catch (error) {
+    logger.warn("deleteWebhook failed (continuing)", error);
+  }
+
+  // Brief pause so a dying old instance releases getUpdates
+  await new Promise((r) => setTimeout(r, 2500));
+
+  try {
+    await bot.start({
+      onStart: () => {
+        logger.info("Telegram bot started.");
+      }
+    });
+  } catch (error: any) {
+    const desc = String(error?.description || error?.message || error);
+    if (desc.includes("409") || desc.includes("Conflict")) {
+      logger.error(
+        "Telegram 409 Conflict: another process is still using this BOT_TOKEN. " +
+          "Set Railway replicas=1, stop other services using the same token, " +
+          "or revoke the token in BotFather and update BOT_TOKEN."
+      );
+      return;
+    }
+    logger.error(
+      "Telegram bot failed to start; web terminal remains available.",
+      error
+    );
+  }
+}
+
 async function main() {
   validateConfig();
 
@@ -48,18 +83,7 @@ async function main() {
       logger.error("Scanner failed to start (web + bot still running).", error)
     );
 
-  try {
-    await bot.start({
-      onStart: () => {
-        logger.info("Telegram bot started.");
-      }
-    });
-  } catch (error) {
-    logger.error(
-      "Telegram bot failed to start; web terminal remains available.",
-      error
-    );
-  }
+  await startTelegramSafely();
 }
 
 async function shutdown(signal: string) {
