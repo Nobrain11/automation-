@@ -1,6 +1,6 @@
 // src/web/api.ts — terminal JSON API (real data only)
 
-import { getSettings, updateSettings, getReferralStats } from "../db/repositories.js";
+import { getSettings, updateSettings, getReferralStats, listWallets } from "../db/repositories.js";
 import { getRecentTokens, getScannerCounts } from "../db/scanner-repository.js";
 import { listOpenPositions, listRecentTrades } from "../db/positions.js";
 import { getAddress, getBalance, hasWallet } from "../services/wallet.js";
@@ -150,14 +150,42 @@ export async function buildDashboard(telegramId: number) {
   const dbCounts = getScannerCounts();
   const ref = getReferralStats(telegramId);
   const sol = await fetchSolPrice();
-  const positions = listOpenPositions(telegramId).map((p) => ({
-    id: p.id,
-    mint: p.mint,
-    symbol: p.symbol,
-    entrySol: p.entry_sol,
-    signature: p.entry_signature,
-    createdAt: p.created_at
-  }));
+
+  const openRows = listOpenPositions(telegramId);
+  const positionMints = openRows.map((p) => p.mint);
+  let marketByMint = new Map<string, { priceUsd: number | null }>();
+  try {
+    if (positionMints.length) {
+      const enriched = await enrichMints(positionMints);
+      marketByMint = new Map(
+        enriched.map((m) => [m.mint, { priceUsd: m.priceUsd }])
+      );
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const positions = openRows.map((p) => {
+    const px = marketByMint.get(p.mint)?.priceUsd ?? null;
+    const entryPx = p.entry_price_usd ?? null;
+    let pnlPct: number | null = null;
+    if (entryPx != null && entryPx > 0 && px != null && px > 0) {
+      pnlPct = Number((((px - entryPx) / entryPx) * 100).toFixed(2));
+    }
+    return {
+      id: p.id,
+      mint: p.mint,
+      symbol: p.symbol,
+      entrySol: p.entry_sol,
+      entryPriceUsd: entryPx,
+      currentPriceUsd: px,
+      pnlPct,
+      peakPnlPct: p.peak_pnl_pct ?? null,
+      signature: p.entry_signature,
+      createdAt: p.created_at
+    };
+  });
+
   const trades = listRecentTrades(telegramId, 25).map((t) => ({
     id: t.id,
     mint: t.mint,
@@ -168,6 +196,20 @@ export async function buildDashboard(telegramId: number) {
     error: t.error,
     createdAt: t.created_at
   }));
+
+  const wallets = listWallets(telegramId).map((w) => ({
+    id: w.id,
+    label: w.label,
+    address: w.public_key,
+    active: Boolean(w.is_active)
+  }));
+
+  const buyFailsToday = trades.filter(
+    (t) =>
+      t.side === "buy" &&
+      t.status === "failed" &&
+      t.createdAt >= Date.now() - 24 * 60 * 60 * 1000
+  ).length;
 
   return {
     wallet: {
@@ -219,6 +261,7 @@ export async function buildDashboard(telegramId: number) {
           totalEarnedSol: ref.totalEarnedSol
         }
       : null,
+    wallets,
     positions,
     trades,
     pnl: {
@@ -226,7 +269,7 @@ export async function buildDashboard(telegramId: number) {
       note:
         trades.length === 0
           ? "No trades yet"
-          : `${trades.length} recent trade(s) · ${positions.length} open`
+          : `${trades.length} recent · ${positions.length} open · ${buyFailsToday} failed buys (24h)`
     }
   };
 }
@@ -322,7 +365,6 @@ export async function getTokenTerminal(
   );
   const s = getSettings(telegramId);
 
-  // Attach scanner filter milestones if this mint was evaluated
   const scanned = getRecentTokens(200).find((row: any) => row.mint === mint);
   const filterTrail = scanned ? mapToken(scanned) : null;
 
