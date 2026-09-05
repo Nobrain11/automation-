@@ -4,7 +4,6 @@ import { getSettings } from "../db/repositories.js";
 export interface FilterMilestone {
   id: string;
   label: string;
-  /** pass | fail | skip (data missing) */
   status: "pass" | "fail" | "skip";
   detail: string;
   hard?: boolean;
@@ -16,10 +15,9 @@ export interface FilterResult {
   milestones: FilterMilestone[];
 }
 
-/**
- * Build ordered filter milestones for a candidate.
- * Used at evaluation time and when rendering history.
- */
+/** Max age for soft freshness pass (HTTP discovery rarely sees <90s) */
+const MAX_AGE_SECONDS = 30 * 60;
+
 export function buildFilterMilestones(
   token: Partial<TokenCandidate> & {
     isBondingCurve?: boolean;
@@ -35,7 +33,6 @@ export function buildFilterMilestones(
 ): FilterMilestone[] {
   const milestones: FilterMilestone[] = [];
 
-  // 1 Bonding curve
   if (token.isBondingCurve === true) {
     milestones.push({
       id: "bonding_curve",
@@ -62,7 +59,6 @@ export function buildFilterMilestones(
     });
   }
 
-  // 2 Mint authority
   if (token.mintAuthorityRevoked === true) {
     milestones.push({
       id: "mint_authority",
@@ -89,7 +85,6 @@ export function buildFilterMilestones(
     });
   }
 
-  // 3 Freeze authority
   if (token.freezeAuthorityRevoked === true) {
     milestones.push({
       id: "freeze_authority",
@@ -116,21 +111,20 @@ export function buildFilterMilestones(
     });
   }
 
-  // 4 Age < 90s
   if (typeof token.ageSeconds === "number") {
-    if (token.ageSeconds < 90) {
+    if (token.ageSeconds <= MAX_AGE_SECONDS) {
       milestones.push({
         id: "age",
         label: "Freshness",
         status: "pass",
-        detail: `${token.ageSeconds}s old · under 90s`
+        detail: `${token.ageSeconds}s old · under ${MAX_AGE_SECONDS}s`
       });
     } else {
       milestones.push({
         id: "age",
         label: "Freshness",
         status: "fail",
-        detail: `${token.ageSeconds}s old · over 90s`
+        detail: `${token.ageSeconds}s old · over ${MAX_AGE_SECONDS}s`
       });
     }
   } else {
@@ -142,7 +136,6 @@ export function buildFilterMilestones(
     });
   }
 
-  // 5 Liquidity ≥ 0.5 SOL
   if (token.curveLiquiditySol != null && Number.isFinite(token.curveLiquiditySol)) {
     if (token.curveLiquiditySol >= 0.5) {
       milestones.push({
@@ -168,7 +161,6 @@ export function buildFilterMilestones(
     });
   }
 
-  // 6 Top 10 holders < 35%
   if (token.top10Percent != null && Number.isFinite(token.top10Percent)) {
     if (token.top10Percent < 35) {
       milestones.push({
@@ -194,21 +186,21 @@ export function buildFilterMilestones(
     });
   }
 
-  // 7 Volume 1m ≥ $5k
+  // Volume: missing = skip (do not fail the whole candidate)
   if (token.volume1mUsd != null && Number.isFinite(token.volume1mUsd)) {
-    if (token.volume1mUsd >= 5000) {
+    if (token.volume1mUsd >= 1000) {
       milestones.push({
         id: "volume",
         label: "1m volume",
         status: "pass",
-        detail: `$${Math.round(token.volume1mUsd).toLocaleString()} · min $5k`
+        detail: `$${Math.round(token.volume1mUsd).toLocaleString()} · min $1k`
       });
     } else {
       milestones.push({
         id: "volume",
         label: "1m volume",
         status: "fail",
-        detail: `$${Math.round(token.volume1mUsd).toLocaleString()} · below $5k`
+        detail: `$${Math.round(token.volume1mUsd).toLocaleString()} · below $1k`
       });
     }
   } else {
@@ -220,7 +212,6 @@ export function buildFilterMilestones(
     });
   }
 
-  // 8 Creator dumping
   if (token.creatorDumping === true) {
     milestones.push({
       id: "creator",
@@ -244,7 +235,6 @@ export function buildFilterMilestones(
     });
   }
 
-  // 9 Smart money (info)
   if (token.smartMoneyOverride) {
     milestones.push({
       id: "smart_money",
@@ -268,7 +258,6 @@ export function evaluateToken(
   token: TokenCandidate,
   telegramId: number
 ): FilterResult {
-  // settings reserved for future user-tuned thresholds
   void getSettings(telegramId);
 
   const milestones = buildFilterMilestones(token);
@@ -279,27 +268,18 @@ export function evaluateToken(
     if (m.id === "bonding_curve") reasons.push("not on bonding curve");
     else if (m.id === "mint_authority") reasons.push("mint authority active");
     else if (m.id === "freeze_authority") reasons.push("freeze authority active");
-    else if (m.id === "age") reasons.push("older than 90 seconds");
+    else if (m.id === "age") reasons.push(`older than ${MAX_AGE_SECONDS} seconds`);
     else if (m.id === "liquidity") reasons.push("curve liquidity below 0.5 SOL");
     else if (m.id === "holders") reasons.push("top 10 holders above 35%");
-    else if (m.id === "volume") reasons.push("1m volume below $5k");
+    else if (m.id === "volume") reasons.push("1m volume below $1k");
     else if (m.id === "creator") reasons.push("creator dumping");
   }
 
-  const hardFailure = milestones.some(
-    (m) => m.hard && m.status === "fail"
-  );
-
-  const softFailures = milestones.filter(
-    (m) => !m.hard && m.status === "fail"
-  );
+  const hardFailure = milestones.some((m) => m.hard && m.status === "fail");
+  const softFailures = milestones.filter((m) => !m.hard && m.status === "fail");
 
   if (token.smartMoneyOverride && !hardFailure) {
-    return {
-      passed: true,
-      reasons: [],
-      milestones
-    };
+    return { passed: true, reasons: [], milestones };
   }
 
   return {
