@@ -165,8 +165,7 @@ export function startWebServer(): void {
       }
 
       if (path === "/api/trending" && req.method === "GET") {
-        const id = requireAuth(req, res);
-        if (!id) return;
+        // Market discovery is public; wallet, dashboard, and execution routes remain authenticated.
         sendJson(res, 200, await buildTrending());
         return;
       }
