@@ -1,0 +1,79 @@
+.ah-hero-title {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.06em;
+}
+.ah-hero-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #edf3f8;
+}
+.ah-hero-lines {
+  margin-top: 8px;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+}
+.ah-label {
+  font-family: ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: #4d5d70;
+  font-weight: 700;
+}
+.ah-bal {
+  font-family: ui-monospace, monospace;
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.ah-wallet-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.ah-hunt {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7a8b9e;
+  padding: 6px 10px;
+  border: 1px solid #1a2433;
+  border-radius: 8px;
+}
+.ah-hunt.on {
+  color: #2ef2a0;
+  border-color: #1a5c3f;
+  background: #0d2a1c;
+}
+.ah-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+.ah-stats div {
+  background: #0f1520;
+  border: 1px solid #1a2433;
+  border-radius: 8px;
+  padding: 10px;
+}
+.ah-stats span {
+  display: block;
+  font-family: ui-monospace, monospace;
+  font-size: 8px;
+  color: #4d5d70;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+.ah-stats b {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+.ah-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+.ah-grid .action { width: 100%; }
