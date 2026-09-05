@@ -1,4 +1,4 @@
-/** Token Terminal — /api/token + auto-hook ANALYZE buttons */
+/** Token Terminal — /api/token + filter milestones + ANALYZE hook */
 
 function fmtUsdLocal(n) {
   if (n == null || Number.isNaN(Number(n))) return "—";
@@ -16,16 +16,17 @@ function shortLocal(a) {
 }
 
 function checkClass(status) {
-  if (status === "safe") return "chk-safe";
-  if (status === "warn") return "chk-warn";
-  if (status === "bad") return "chk-bad";
+  if (status === "safe" || status === "pass") return "chk-safe";
+  if (status === "warn" || status === "skip") return "chk-warn";
+  if (status === "bad" || status === "fail") return "chk-bad";
   return "chk-unk";
 }
 
 function checkMark(status) {
-  if (status === "safe") return "✓";
+  if (status === "safe" || status === "pass") return "✓";
   if (status === "warn") return "⚠";
-  if (status === "bad") return "✗";
+  if (status === "skip") return "○";
+  if (status === "bad" || status === "fail") return "✗";
   return "?";
 }
 
@@ -69,6 +70,8 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
   const auto = data.automation || {};
   const checks = data.checks || [];
   const pos = data.yourPosition || { open: false, positions: [] };
+  const milestones = data.filterMilestones || [];
+  const summary = data.filterSummary;
   const img = t.imageUrl
     ? `<img class="tt-logo" src="${t.imageUrl}" alt="" onerror="this.style.display='none'" />`
     : `<div class="tt-logo ph">$</div>`;
@@ -83,6 +86,23 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
         </div>`
     )
     .join("");
+
+  const msHtml = milestones.length
+    ? milestones
+        .map(
+          (c, i) =>
+            `<div class="tt-check ${checkClass(c.status)}">
+          <span class="mk">${i + 1}</span>
+          <span class="lb">${checkMark(c.status)} ${c.label}</span>
+          <span class="dt">${c.detail}</span>
+        </div>`
+        )
+        .join("")
+    : `<div class="empty">Not evaluated by scanner yet</div>`;
+
+  const msHead = summary
+    ? `FILTER MILESTONES · ${summary.pass} pass · ${summary.fail} fail`
+    : "FILTER MILESTONES";
 
   const posHtml = pos.open
     ? pos.positions
@@ -114,6 +134,8 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
               <span class="badge pump">SOLANA</span>
               ${t.complete ? '<span class="badge">GRADUATED</span>' : '<span class="badge">ON CURVE</span>'}
               ${t.live ? '<span class="badge pump">● LIVE</span>' : ""}
+              ${data.scannerPassed === true ? '<span class="badge pump">FILTER PASS</span>' : ""}
+              ${data.scannerPassed === false ? '<span class="badge">FILTER FAIL</span>' : ""}
             </div>
           </div>
         </div>
@@ -128,6 +150,10 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
         </div>
       </div>
       <div class="panel">
+        <h2>${msHead}</h2>
+        <div class="tt-checks">${msHtml}</div>
+      </div>
+      <div class="panel">
         <h2>CHART</h2>
         <div class="empty">${data.chart?.note || "Chart data not available"}</div>
       </div>
@@ -137,22 +163,12 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
           <div><span>Market Cap</span><b>${fmtUsdLocal(m.marketCapUsd)}</b></div>
           <div><span>Liquidity</span><b>${m.liquiditySol != null ? m.liquiditySol.toFixed(2) + " SOL" : "—"}</b></div>
           <div><span>24H Volume</span><b>${m.volume24h != null ? fmtUsdLocal(m.volume24h) : "—"}</b></div>
-          <div><span>24H Trades</span><b>${m.trades24h != null ? m.trades24h : "—"}</b></div>
           <div><span>Holders</span><b>${m.holders != null ? m.holders : "—"}</b></div>
-          <div><span>FDV</span><b>${fmtUsdLocal(m.fdv)}</b></div>
         </div>
       </div>
       <div class="panel">
         <h2>TOKEN CHECKS</h2>
         <div class="tt-checks">${checksHtml}</div>
-      </div>
-      <div class="panel">
-        <h2>HOLDERS</h2>
-        <div class="empty">${data.holders?.note || "No holder data"}</div>
-      </div>
-      <div class="panel">
-        <h2>TRANSACTIONS</h2>
-        <div class="empty">${data.transactions?.note || "No transaction tape"}</div>
       </div>
       <div class="panel">
         <h2>AUTOMATION ANALYSIS</h2>
@@ -161,9 +177,6 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
           <div><span>Strategy Fit</span><b>${auto.strategyFit ?? "—"}</b></div>
           <div><span>Risk</span><b>${auto.risk ?? "—"}</b></div>
           <div><span>Momentum</span><b>${auto.momentum ?? "—"}</b></div>
-        </div>
-        <div class="row" style="margin-top:10px">
-          <button type="button" class="action" data-go="automation">OPEN AUTO-HUNTER</button>
         </div>
       </div>
       <div class="panel">
@@ -263,7 +276,6 @@ function wireBack(root) {
   });
 }
 
-/** Hook ANALYZE / token heads after each render */
 function hookTokenButtons() {
   document.querySelectorAll(".tok-analyze").forEach((btn) => {
     if (btn.dataset.ttHooked) return;
