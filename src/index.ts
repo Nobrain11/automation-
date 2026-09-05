@@ -4,7 +4,10 @@ import { bot } from "./bot/bot.js";
 import { config, validateConfig } from "./config.js";
 import { runMigrations } from "./db/migrations.js";
 import { closeDatabase } from "./db/sqlite.js";
-import { httpDiscovery } from "./scanner/http-discovery.js";
+import {
+  httpDiscovery,
+  setHttpDecisionHandler
+} from "./scanner/http-discovery.js";
 import { scanner, setDecisionHandler } from "./scanner/scanner-instance.js";
 import { onTokenDecision } from "./services/hunter.js";
 import {
@@ -59,6 +62,7 @@ async function main() {
   logger.info("Database initialized.");
 
   setDecisionHandler(onTokenDecision);
+  setHttpDecisionHandler(onTokenDecision);
 
   startWebServer();
   if (config.webBaseUrl) {
@@ -73,7 +77,6 @@ async function main() {
     logger.error("Position monitor failed to start", error);
   }
 
-  // HTTP discovery works without WS / RPC quota
   try {
     httpDiscovery.start(20_000);
   } catch (error) {

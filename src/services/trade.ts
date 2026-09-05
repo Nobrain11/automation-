@@ -17,6 +17,7 @@ import {
   getPosition,
   closePosition
 } from "../db/positions.js";
+import { enrichMints } from "./market.js";
 import { decrypt } from "../utils/crypto.js";
 import { logger } from "../utils/logger.js";
 
@@ -141,6 +142,15 @@ export async function buyToken(input: {
       };
     }
 
+    // Snapshot entry price for PnL monitor (best-effort)
+    let entryPriceUsd: number | null = null;
+    try {
+      const enriched = await enrichMints([mint.toBase58()]);
+      entryPriceUsd = enriched[0]?.priceUsd ?? null;
+    } catch {
+      entryPriceUsd = null;
+    }
+
     const signature = await jupiterSwap({
       keypair,
       inputMint: SOL_MINT,
@@ -154,7 +164,8 @@ export async function buyToken(input: {
       mint: mint.toBase58(),
       symbol: input.symbol ?? null,
       entrySol: amountSol,
-      signature
+      signature,
+      entryPriceUsd
     });
 
     recordTrade({
@@ -205,7 +216,6 @@ export async function sellPosition(input: {
   );
 
   try {
-    // Find token account balance
     const mint = new PublicKey(pos.mint);
     const accounts = await connection.getParsedTokenAccountsByOwner(
       keypair.publicKey,
@@ -230,7 +240,6 @@ export async function sellPosition(input: {
       return { ok: false, error: "No token balance found — marked closed." };
     }
 
-    // Jupiter amount is integer raw units
     if (amount > BigInt(Number.MAX_SAFE_INTEGER)) {
       return { ok: false, error: "Balance too large to sell via this path." };
     }

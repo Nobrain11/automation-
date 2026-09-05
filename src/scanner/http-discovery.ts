@@ -14,6 +14,17 @@ const HEADERS: Record<string, string> = {
   Referer: "https://pump.fun/"
 };
 
+type DecisionHandler = (
+  telegramId: number,
+  token: TokenCandidate
+) => Promise<void>;
+
+let decisionHandler: DecisionHandler | null = null;
+
+export function setHttpDecisionHandler(handler: DecisionHandler): void {
+  decisionHandler = handler;
+}
+
 function num(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "") {
@@ -61,15 +72,7 @@ function coinToCandidate(raw: any): TokenCandidate | null {
         ? vSol / 1e9
         : null;
 
-  // pump frontend coins are bonding-curve launches; treat as on-curve unless graduated
   const isBondingCurve = !Boolean(coin?.complete);
-
-  // Authorities: API does not always expose — mark skip via filters when unknown
-  // Prefer optimistic pass for revoked when graduated; unknown → false would hard-fail everyone
-  // Use true only when we cannot know? Filters treat undefined as skip if we pass undefined.
-  // TokenCandidate requires boolean — use true as soft default for HTTP path so soft filters still apply
-  const mintAuthorityRevoked = true;
-  const freezeAuthorityRevoked = true;
 
   const token: TokenCandidate = {
     mint,
@@ -81,8 +84,8 @@ function coinToCandidate(raw: any): TokenCandidate | null {
     ageSeconds,
     bondingCurve: coin?.bonding_curve ?? null,
     isBondingCurve,
-    mintAuthorityRevoked,
-    freezeAuthorityRevoked,
+    mintAuthorityRevoked: true,
+    freezeAuthorityRevoked: true,
     top10Percent: null,
     curveLiquiditySol,
     volume1mUsd: null,
@@ -95,7 +98,6 @@ function coinToCandidate(raw: any): TokenCandidate | null {
   const result = evaluateToken(token, 0);
   token.passed = result.passed;
   token.rejectionReasons = result.reasons;
-  // ensure milestones path is exercised
   void buildFilterMilestones(token);
 
   return token;
@@ -105,7 +107,7 @@ export class HttpDiscovery {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
   private seen = new Set<string>();
-  private stats = { polls: 0, saved: 0, lastAt: null as number | null };
+  private stats = { polls: 0, saved: 0, passed: 0, lastAt: null as number | null };
 
   getStats() {
     return { ...this.stats, seen: this.seen.size, running: this.running };
@@ -153,7 +155,6 @@ export class HttpDiscovery {
         if (!token) continue;
         if (this.seen.has(token.mint)) continue;
         this.seen.add(token.mint);
-        // cap memory
         if (this.seen.size > 2000) {
           const first = this.seen.values().next().value;
           if (first) this.seen.delete(first);
@@ -162,6 +163,13 @@ export class HttpDiscovery {
           saveTokenCandidate(token);
           saved++;
           this.stats.saved++;
+
+          if (token.passed && decisionHandler) {
+            this.stats.passed++;
+            void decisionHandler(0, token).catch((err) =>
+              logger.warn("HTTP hunter decision failed", err)
+            );
+          }
         } catch {
           /* ignore db errors */
         }
