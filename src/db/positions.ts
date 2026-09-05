@@ -7,6 +7,8 @@ export interface PositionRow {
   symbol: string | null;
   entry_sol: number;
   entry_signature: string | null;
+  entry_price_usd: number | null;
+  peak_pnl_pct: number | null;
   status: string;
   created_at: number;
   closed_at: number | null;
@@ -20,6 +22,7 @@ export function openPosition(input: {
   symbol?: string | null;
   entrySol: number;
   signature: string;
+  entryPriceUsd?: number | null;
 }): number {
   const now = Date.now();
   const result = db
@@ -27,8 +30,8 @@ export function openPosition(input: {
       `
     INSERT INTO positions (
       telegram_id, mint, symbol, entry_sol, entry_signature,
-      status, created_at
-    ) VALUES (?, ?, ?, ?, ?, 'open', ?)
+      entry_price_usd, peak_pnl_pct, status, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 0, 'open', ?)
   `
     )
     .run(
@@ -37,9 +40,20 @@ export function openPosition(input: {
       input.symbol ?? null,
       input.entrySol,
       input.signature,
+      input.entryPriceUsd ?? null,
       now
     );
   return Number(result.lastInsertRowid);
+}
+
+export function updatePositionPeak(positionId: number, peakPnlPct: number): void {
+  db.prepare(
+    `
+    UPDATE positions SET peak_pnl_pct = ?
+    WHERE id = ? AND status = 'open'
+      AND (peak_pnl_pct IS NULL OR peak_pnl_pct < ?)
+  `
+  ).run(peakPnlPct, positionId, peakPnlPct);
 }
 
 export function getPosition(

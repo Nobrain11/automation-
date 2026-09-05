@@ -1,28 +1,16 @@
-// Auto-exit: time stop, stop-loss, take-profit (first tier = full exit for simplicity)
+// Auto-exit: time stop, stop-loss, take-profit, trailing (entry_price based)
 
-import { listAllOpenPositions } from "../db/positions.js";
+import {
+  listAllOpenPositions,
+  updatePositionPeak
+} from "../db/positions.js";
 import { getSettings } from "../db/repositories.js";
 import { enrichMints } from "./market.js";
 import { sellPosition } from "./trade.js";
 import { logger } from "../utils/logger.js";
 
-const peakPnl = new Map<number, number>(); // positionId -> peak %
 let running = false;
 let timer: ReturnType<typeof setInterval> | null = null;
-
-async function fetchSolUsd(): Promise<number | null> {
-  try {
-    const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd",
-      { signal: AbortSignal.timeout(4000) }
-    );
-    if (!res.ok) return null;
-    const data: any = await res.json();
-    return typeof data?.solana?.usd === "number" ? data.solana.usd : null;
-  } catch {
-    return null;
-  }
-}
 
 async function tick(): Promise<void> {
   if (running) return;
@@ -31,7 +19,6 @@ async function tick(): Promise<void> {
     const open = listAllOpenPositions();
     if (!open.length) return;
 
-    const solUsd = await fetchSolUsd();
     const mints = [...new Set(open.map((p) => p.mint))];
     const market = await enrichMints(mints);
     const byMint = new Map(market.map((m) => [m.mint, m]));
@@ -41,7 +28,7 @@ async function tick(): Promise<void> {
         const s = getSettings(pos.telegram_id);
         const ageMin = (Date.now() - pos.created_at) / 60_000;
 
-        // Time stop
+        // Time stop always works without price
         if (s.time_stop_minutes > 0 && ageMin >= s.time_stop_minutes) {
           logger.info(
             `Time-stop exit pos=${pos.id} age=${ageMin.toFixed(1)}m`
@@ -50,35 +37,40 @@ async function tick(): Promise<void> {
             telegramId: pos.telegram_id,
             positionId: pos.id
           });
-          peakPnl.delete(pos.id);
           continue;
         }
 
         const m = byMint.get(pos.mint);
-        if (!m?.priceUsd || !solUsd || pos.entry_sol <= 0) continue;
+        const entryPx = pos.entry_price_usd;
+        const nowPx = m?.priceUsd ?? null;
 
-        // Approximate position value needs token balance — sellPosition handles sell;
-        // for PnL % we use price change since we lack token qty here.
-        // Use 24h change is wrong; without entry price we only time-stop + optional
-        // hard SL when 1h change is deeply negative as soft signal is unreliable.
-        // Better: store nothing extra — use DexScreener priceChange1h only as soft SL proxy
-        // is unsafe. Skip price-based unless we can estimate.
+        if (entryPx == null || entryPx <= 0 || nowPx == null || nowPx <= 0) {
+          // no reliable price path — only time-stop applies
+          continue;
+        }
 
-        // Soft approach: if market data shows priceChange1h <= -stop_loss, exit
-        const chg1h = m.priceChange1h;
-        if (chg1h != null && chg1h <= -Math.abs(s.stop_loss)) {
+        const pnlPct = ((nowPx - entryPx) / entryPx) * 100;
+
+        // Track peak for trailing
+        const prevPeak = pos.peak_pnl_pct ?? 0;
+        if (pnlPct > prevPeak) {
+          updatePositionPeak(pos.id, pnlPct);
+        }
+        const peak = Math.max(prevPeak, pnlPct);
+
+        // Stop loss
+        if (pnlPct <= -Math.abs(s.stop_loss)) {
           logger.info(
-            `Stop-loss proxy exit pos=${pos.id} chg1h=${chg1h}% SL=${s.stop_loss}%`
+            `Stop-loss exit pos=${pos.id} pnl=${pnlPct.toFixed(1)}% SL=${s.stop_loss}%`
           );
           await sellPosition({
             telegramId: pos.telegram_id,
             positionId: pos.id
           });
-          peakPnl.delete(pos.id);
           continue;
         }
 
-        // Take profit proxy via 1h/5m positive move hitting first TP tier
+        // Take profit — first tier full exit (simple, reliable)
         let tiers: Array<{ profit: number; sellPercent: number }> = [];
         try {
           tiers = JSON.parse(s.tp_tiers);
@@ -86,33 +78,26 @@ async function tick(): Promise<void> {
           tiers = [];
         }
         const firstTp = tiers[0]?.profit;
-        const mom = m.priceChange5m ?? m.priceChange1h;
-        if (firstTp != null && mom != null && mom >= firstTp) {
+        if (firstTp != null && pnlPct >= firstTp) {
           logger.info(
-            `TP proxy exit pos=${pos.id} mom=${mom}% tp=${firstTp}%`
+            `TP exit pos=${pos.id} pnl=${pnlPct.toFixed(1)}% tp=${firstTp}%`
           );
           await sellPosition({
             telegramId: pos.telegram_id,
             positionId: pos.id
           });
-          peakPnl.delete(pos.id);
           continue;
         }
 
-        // Trailing: track peak momentum; exit if pullback from peak
-        if (mom != null && mom >= s.trailing_after) {
-          const peak = Math.max(peakPnl.get(pos.id) ?? mom, mom);
-          peakPnl.set(pos.id, peak);
-          if (peak - mom >= s.trailing_pullback) {
-            logger.info(
-              `Trailing exit pos=${pos.id} peak=${peak} now=${mom} pull=${s.trailing_pullback}`
-            );
-            await sellPosition({
-              telegramId: pos.telegram_id,
-              positionId: pos.id
-            });
-            peakPnl.delete(pos.id);
-          }
+        // Trailing after peak
+        if (peak >= s.trailing_after && peak - pnlPct >= s.trailing_pullback) {
+          logger.info(
+            `Trailing exit pos=${pos.id} peak=${peak.toFixed(1)} now=${pnlPct.toFixed(1)} pull=${s.trailing_pullback}`
+          );
+          await sellPosition({
+            telegramId: pos.telegram_id,
+            positionId: pos.id
+          });
         }
       } catch (error) {
         logger.warn(`Monitor pos ${pos.id} error`, error);

@@ -137,6 +137,8 @@ export function runMigrations(): void {
   addColumnIfMissing("users", "username", "TEXT");
   addColumnIfMissing("users", "first_name", "TEXT");
   addColumnIfMissing("users", "last_name", "TEXT");
+  addColumnIfMissing("positions", "entry_price_usd", "REAL");
+  addColumnIfMissing("positions", "peak_pnl_pct", "REAL");
 }
 
 function addColumnIfMissing(table: string, column: string, type: string): void {
