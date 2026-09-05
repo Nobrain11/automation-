@@ -4,6 +4,7 @@ import { bot } from "./bot/bot.js";
 import { config, validateConfig } from "./config.js";
 import { runMigrations } from "./db/migrations.js";
 import { closeDatabase } from "./db/sqlite.js";
+import { httpDiscovery } from "./scanner/http-discovery.js";
 import { scanner, setDecisionHandler } from "./scanner/scanner-instance.js";
 import { onTokenDecision } from "./services/hunter.js";
 import {
@@ -14,7 +15,6 @@ import { logger } from "./utils/logger.js";
 import { startWebServer } from "./web/server.js";
 
 async function startTelegramSafely() {
-  // Clear any leftover webhook so long-polling is the only consumer
   try {
     await bot.api.deleteWebhook({ drop_pending_updates: true });
     logger.info("Telegram webhook cleared (long-polling mode).");
@@ -22,7 +22,6 @@ async function startTelegramSafely() {
     logger.warn("deleteWebhook failed (continuing)", error);
   }
 
-  // Brief pause so a dying old instance releases getUpdates
   await new Promise((r) => setTimeout(r, 2500));
 
   try {
@@ -35,9 +34,8 @@ async function startTelegramSafely() {
     const desc = String(error?.description || error?.message || error);
     if (desc.includes("409") || desc.includes("Conflict")) {
       logger.error(
-        "Telegram 409 Conflict: another process is still using this BOT_TOKEN. " +
-          "Set Railway replicas=1, stop other services using the same token, " +
-          "or revoke the token in BotFather and update BOT_TOKEN."
+        "Telegram 409 Conflict: another process still uses this BOT_TOKEN. " +
+          "Replicas must be 1. Or revoke token in BotFather and update BOT_TOKEN."
       );
       return;
     }
@@ -62,7 +60,6 @@ async function main() {
 
   setDecisionHandler(onTokenDecision);
 
-  // Always bind HTTP first so Railway health checks pass
   startWebServer();
   if (config.webBaseUrl) {
     logger.info(`Web terminal: ${config.webBaseUrl}`);
@@ -76,11 +73,18 @@ async function main() {
     logger.error("Position monitor failed to start", error);
   }
 
+  // HTTP discovery works without WS / RPC quota
+  try {
+    httpDiscovery.start(20_000);
+  } catch (error) {
+    logger.error("HTTP discovery failed to start", error);
+  }
+
   void scanner
     .start()
-    .then(() => logger.info("Pump.fun discovery engine initialized."))
+    .then(() => logger.info("Pump.fun log scanner initialized."))
     .catch((error) =>
-      logger.error("Scanner failed to start (web + bot still running).", error)
+      logger.error("WS scanner failed (HTTP discovery still running).", error)
     );
 
   await startTelegramSafely();
@@ -90,6 +94,11 @@ async function shutdown(signal: string) {
   logger.info(`Received ${signal}. Shutting down...`);
   try {
     stopPositionMonitor();
+  } catch {
+    /* ignore */
+  }
+  try {
+    httpDiscovery.stop();
   } catch {
     /* ignore */
   }

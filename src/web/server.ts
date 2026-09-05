@@ -7,6 +7,8 @@ import { join, extname } from "node:path";
 import { config } from "../config.js";
 import { countAllWallets } from "../db/repositories.js";
 import { getResolvedDatabasePath } from "../db/sqlite.js";
+import { httpDiscovery } from "../scanner/http-discovery.js";
+import { scanner } from "../scanner/scanner-instance.js";
 import { logger } from "../utils/logger.js";
 import {
   createSession,
@@ -262,11 +264,29 @@ export function startWebServer(): void {
         const dbPath = getResolvedDatabasePath();
         const wallets = countAllWallets();
         const persistent = dbPath.startsWith("/data");
+        let rpcHost = "?";
+        try {
+          rpcHost = new URL(config.rpcUrl).host;
+        } catch {
+          /* ignore */
+        }
+        const sc = scanner.getStats();
+        const http = httpDiscovery.getStats();
         sendJson(res, 200, {
           ok: true,
           dbPath,
           walletRows: wallets,
           persistentVolume: persistent,
+          rpcHost,
+          webBaseUrl: config.webBaseUrl || null,
+          scanner: {
+            wsRunning: sc.running,
+            discovered: sc.discovered,
+            evaluated: sc.evaluated,
+            passed: sc.passed,
+            reconnects: sc.websocketReconnects
+          },
+          httpDiscovery: http,
           hint: persistent
             ? wallets > 0
               ? "Volume OK — wallets stored"
