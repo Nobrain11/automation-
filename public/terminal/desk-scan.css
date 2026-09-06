@@ -1,0 +1,302 @@
+/* Premium discover desk — dense cards like pro terminals */
+
+.scan-desk {
+  padding: 0 0 8px;
+}
+
+.scan-ticker {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 0 10px;
+  margin: 0 -2px 8px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+.scan-ticker::-webkit-scrollbar { display: none; }
+.scan-ticker span { color: var(--muted); }
+.scan-ticker .up { color: var(--green); }
+.scan-ticker .down { color: var(--red); }
+
+.scan-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.scan-live .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dim);
+  display: inline-block;
+}
+.scan-live .dot.on {
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(46, 242, 160, 0.45);
+}
+.scan-pill {
+  background: #1a2230;
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  padding: 2px 7px;
+  color: var(--blue);
+  font-size: 9px;
+}
+
+.scan-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  scrollbar-width: none;
+}
+.scan-tabs::-webkit-scrollbar { display: none; }
+.scan-tab {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.scan-tab.active {
+  background: var(--green-dim);
+  border-color: var(--green-border);
+  color: var(--green);
+}
+
+.scan-search {
+  width: 100%;
+  background: #0a0e14;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  padding: 12px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.scan-search:focus {
+  outline: none;
+  border-color: var(--green-border);
+}
+
+.desk-card {
+  background: linear-gradient(180deg, #0d131c 0%, #0a0f16 100%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.desk-card-top {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.desk-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #15202b;
+  border: 1px solid var(--line2);
+  object-fit: cover;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.desk-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.desk-name {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+.desk-sym {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.desk-badge {
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #12261c;
+  color: var(--green);
+  border: 1px solid var(--green-border);
+}
+.desk-ca {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  margin-top: 2px;
+}
+
+.desk-price-col {
+  margin-left: auto;
+  text-align: right;
+  flex-shrink: 0;
+}
+.desk-price {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+.desk-chg {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.desk-chg.up { color: var(--green); }
+.desk-chg.down { color: var(--red); }
+
+.desk-spark {
+  height: 36px;
+  margin: 10px 0 8px;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(46, 242, 160, 0.12), transparent 70%),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 8px,
+      rgba(255, 255, 255, 0.02) 8px,
+      rgba(255, 255, 255, 0.02) 9px
+    );
+  position: relative;
+  overflow: hidden;
+}
+.desk-spark::after {
+  content: "";
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: 30%;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--green), transparent);
+  opacity: 0.85;
+}
+.desk-spark-note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--dim);
+  letter-spacing: 0.08em;
+}
+
+.desk-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+  margin-bottom: 10px;
+}
+.desk-metrics div {
+  text-align: center;
+}
+.desk-metrics span {
+  display: block;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+.desk-metrics b {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.desk-pressure {
+  margin-bottom: 12px;
+}
+.desk-pressure-meta {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.desk-pressure-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: #2a1216;
+  overflow: hidden;
+}
+.desk-pressure-bar > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #1a5c3f, var(--green));
+  border-radius: 999px;
+}
+
+.desk-actions {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+}
+.desk-quick {
+  border: 0;
+  background: #19e888;
+  color: #04140c;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+.desk-icon-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--line2);
+  background: #0c121a;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+@media (max-width: 380px) {
+  .desk-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
