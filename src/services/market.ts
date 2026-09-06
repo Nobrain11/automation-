@@ -1,5 +1,5 @@
 // pump.fun native market data (NO DexScreener)
-// Sources: frontend-api-v3 top-runners, last trade, new launches, live
+// Movers: mcap > $5k and <= $100k, liquidity >= $2k when known
 
 import { logger } from "../utils/logger.js";
 
@@ -43,9 +43,9 @@ export interface MarketToken {
   replyCount?: number | null;
 }
 
-/** Movers list: exclude mcap at or below $5k */
 const MOVERS_MCAP_MIN = 5_000;
 const MOVERS_MCAP_MAX = 100_000;
+const MOVERS_LIQ_MIN = 2_000;
 const PREFERRED_MAX = 25_000;
 
 let cacheMovers: { at: number; tokens: MarketToken[] } | null = null;
@@ -352,10 +352,12 @@ export async function fetchPumpMovers(): Promise<{
       }
     }
 
-    // Hard rule for movers: mcap must be ABOVE $5k and <= $100k
     let tokens = [...byMint.values()].filter((t) => {
       const m = t.marketCap;
-      return m != null && m > MOVERS_MCAP_MIN && m <= MOVERS_MCAP_MAX;
+      if (m == null || m <= MOVERS_MCAP_MIN || m > MOVERS_MCAP_MAX) return false;
+      // Drop known thin liquidity; unknown liq still allowed
+      if (t.liquidityUsd != null && t.liquidityUsd < MOVERS_LIQ_MIN) return false;
+      return true;
     });
 
     tokens.sort((a, b) => {
@@ -363,6 +365,7 @@ export async function fetchPumpMovers(): Promise<{
         const m = t.marketCap ?? 0;
         let s = t.spikeScore || 0;
         if (m > 5_000 && m <= PREFERRED_MAX) s += 20;
+        if (t.liquidityUsd != null && t.liquidityUsd >= 5_000) s += 5;
         return s;
       };
       return score(b) - score(a);
@@ -371,7 +374,7 @@ export async function fetchPumpMovers(): Promise<{
     const top = tokens.slice(0, 40);
     cacheMovers = { at: Date.now(), tokens: top };
     logger.info(
-      `pump.fun movers: ${top.length} tokens (mcap > $${MOVERS_MCAP_MIN}) in ${Date.now() - started}ms`
+      `pump.fun movers: ${top.length} (mcap >$${MOVERS_MCAP_MIN}, liq>=$${MOVERS_LIQ_MIN} when known) ${Date.now() - started}ms`
     );
     return { online: top.length > 0, tokens: top };
   } catch (error) {
@@ -405,7 +408,7 @@ export async function enrichMints(mints: string[]): Promise<MarketToken[]> {
         const mapped = mapPumpCoin(data, solUsd);
         if (mapped) out.push(mapped);
       } catch {
-        // ignore single failures
+        // ignore
       }
     })
   );
