@@ -19,6 +19,7 @@ import {
   listRecentTrades
 } from "../db/positions.js";
 import { enrichMints } from "./market.js";
+import { notifyTrade } from "./telegram-notify.js";
 import { decrypt } from "../utils/crypto.js";
 import { logger } from "../utils/logger.js";
 
@@ -38,24 +39,6 @@ function loadKeypair(telegramId: number): Keypair {
   return Keypair.fromSecretKey(bs58.decode(secret));
 }
 
-function dailyRealizedLossSol(telegramId: number): number {
-  const dayStart = Date.now() - 24 * 60 * 60 * 1000;
-  const trades = listRecentTrades(telegramId, 200);
-  let loss = 0;
-  for (const t of trades) {
-    if (t.created_at < dayStart) continue;
-    if (t.side !== "sell") continue;
-    if (t.status !== "submitted" && t.status !== "ok") continue;
-    // without full exit_sol accounting, treat failed sells only;
-    // loss cap mainly blocks new buys after many failed attempts is weak —
-    // use entry amounts of closed positions as rough exposure control later
-  }
-  void loss;
-  // Soft: count submitted buys * avg as exposure proxy not loss.
-  // Real loss tracking needs exit_sol — enforce via kill + max trades primarily.
-  return 0;
-}
-
 async function sendSignedTx(serialized: Uint8Array): Promise<string> {
   const signature = await connection.sendRawTransaction(serialized, {
     skipPreflight: false,
@@ -67,12 +50,10 @@ async function sendSignedTx(serialized: Uint8Array): Promise<string> {
   return signature;
 }
 
-/** PumpPortal local trade — works on pump.fun bonding curve */
 async function pumpPortalSwap(input: {
   keypair: Keypair;
   mint: string;
   action: "buy" | "sell";
-  /** For buy: SOL amount. For sell: percentage 1-100 or "100%" */
   amount: number | string;
   slippage: number;
 }): Promise<string> {
@@ -178,10 +159,6 @@ export async function buyToken(input: {
     return { ok: false, error: "Invalid buy size (max 5 SOL per click)." };
   }
 
-  // Daily loss cap: block if too many recent buy failures / exposure via open positions
-  // Hard guard: max open positions already in hunter; here soft daily trades
-  void dailyRealizedLossSol;
-
   let mint: PublicKey;
   try {
     mint = new PublicKey(input.mint);
@@ -214,7 +191,6 @@ export async function buyToken(input: {
     let signature: string;
     let route = "pumpportal";
 
-    // Prefer PumpPortal for early pump.fun coins
     try {
       signature = await pumpPortalSwap({
         keypair,
@@ -253,6 +229,17 @@ export async function buyToken(input: {
       status: "submitted"
     });
 
+    void notifyTrade({
+      telegramId: input.telegramId,
+      side: "buy",
+      mint: mint.toBase58(),
+      symbol: input.symbol,
+      amountSol,
+      signature,
+      ok: true,
+      route
+    });
+
     return { ok: true, signature, route };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -264,6 +251,15 @@ export async function buyToken(input: {
       amountSol,
       status: "failed",
       error: msg.slice(0, 300)
+    });
+    void notifyTrade({
+      telegramId: input.telegramId,
+      side: "buy",
+      mint: input.mint,
+      symbol: input.symbol,
+      amountSol,
+      ok: false,
+      error: msg.slice(0, 200)
     });
     return {
       ok: false,
@@ -317,7 +313,6 @@ export async function sellPosition(input: {
     let route = "pumpportal";
 
     try {
-      // Sell 100% via PumpPortal
       signature = await pumpPortalSwap({
         keypair,
         mint: pos.mint,
@@ -356,6 +351,17 @@ export async function sellPosition(input: {
       status: "submitted"
     });
 
+    void notifyTrade({
+      telegramId: input.telegramId,
+      side: "sell",
+      mint: pos.mint,
+      symbol: pos.symbol,
+      amountSol: pos.entry_sol,
+      signature,
+      ok: true,
+      route
+    });
+
     return { ok: true, signature, route };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -367,6 +373,15 @@ export async function sellPosition(input: {
       amountSol: pos.entry_sol,
       status: "failed",
       error: msg.slice(0, 300)
+    });
+    void notifyTrade({
+      telegramId: input.telegramId,
+      side: "sell",
+      mint: pos.mint,
+      symbol: pos.symbol,
+      amountSol: pos.entry_sol,
+      ok: false,
+      error: msg.slice(0, 200)
     });
     return { ok: false, error: msg.slice(0, 220) };
   }
