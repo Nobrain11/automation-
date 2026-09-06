@@ -1,4 +1,4 @@
-/** Product home — command center (includes Auto-Hunter controls) */
+/** Product home — command center with live activity strip */
 
 function renderHome(d) {
   window.__lastDash = d;
@@ -15,6 +15,18 @@ function renderHome(d) {
       : "";
   const huntLabel = huntOn ? "ON" : h.killSwitch ? "KILLED" : "OFF";
   const pnlNote = d.pnl?.note || "No closed PnL yet";
+
+  const trades = d.trades || [];
+  const actHtml = trades.length
+    ? trades
+        .slice(0, 6)
+        .map((t) => {
+          const tms = new Date(t.createdAt).toLocaleTimeString();
+          const cls = t.status === "failed" ? "bad" : t.side === "buy" ? "ok" : "";
+          return `<div class="feed-line ${cls}"><b>${tms}</b> · ${String(t.side).toUpperCase()} ${t.status} · ${short(t.mint)} · ${t.amountSol} SOL</div>`;
+        })
+        .join("")
+    : `<div class="empty">No trades yet</div>`;
 
   const walletBlock = d.wallet?.connected
     ? `<div class="panel ah-wallet">
@@ -71,6 +83,10 @@ ${s.maxTradesHour ?? "—"}/hr · ${s.maxTradesDay ?? "—"}/day · Cap ${s.dail
         <button type="button" class="action ghost" data-menu="activity">ACTIVITY</button>
         <button type="button" class="action ghost" data-menu="wallet">WALLETS</button>
       </div>
+    </div>
+    <div class="panel">
+      <h2>RECENT ACTIVITY</h2>
+      ${actHtml}
     </div>`;
 }
 
@@ -128,7 +144,6 @@ Time stop ${s.timeStopMinutes ?? "—"} min</div>
     return `<div class="panel"><h1>PNL</h1><div class="ws-meta">${d.pnl?.note || "No data"}</div>
       <button type="button" class="action ghost" data-go="home">← Home</button></div>`;
   }
-  // default portfolio
   return `<div class="panel"><h1>MORE</h1>
     <div class="menu-list">
       <button type="button" class="action" data-menu="risk">Settings</button>
