@@ -106,6 +106,22 @@ export function listOpenPositions(telegramId: number): PositionRow[] {
     .all(telegramId) as PositionRow[];
 }
 
+export function listClosedPositions(
+  telegramId: number,
+  limit = 50
+): PositionRow[] {
+  return db
+    .prepare(
+      `
+    SELECT * FROM positions
+    WHERE telegram_id = ? AND status = 'closed'
+    ORDER BY closed_at DESC
+    LIMIT ?
+  `
+    )
+    .all(telegramId, limit) as PositionRow[];
+}
+
 export function listAllOpenPositions(): PositionRow[] {
   return db
     .prepare(
@@ -116,6 +132,47 @@ export function listAllOpenPositions(): PositionRow[] {
   `
     )
     .all() as PositionRow[];
+}
+
+/** Real closed PnL only when exit_sol is recorded */
+export function portfolioSummary(telegramId: number): {
+  openCount: number;
+  closedCount: number;
+  realizedSol: number | null;
+  openEntrySol: number;
+  note: string;
+} {
+  const open = listOpenPositions(telegramId);
+  const closed = listClosedPositions(telegramId, 200);
+  const openEntrySol = open.reduce((s, p) => s + (p.entry_sol || 0), 0);
+
+  const withExit = closed.filter(
+    (p) => p.exit_sol != null && Number.isFinite(p.exit_sol)
+  );
+  let realizedSol: number | null = null;
+  if (withExit.length) {
+    realizedSol = withExit.reduce(
+      (s, p) => s + ((p.exit_sol as number) - p.entry_sol),
+      0
+    );
+    realizedSol = Number(realizedSol.toFixed(6));
+  }
+
+  const note = !closed.length
+    ? open.length
+      ? `${open.length} open · no closed trades yet`
+      : "No positions yet"
+    : realizedSol != null
+      ? `${open.length} open · ${closed.length} closed · realized ${realizedSol >= 0 ? "+" : ""}${realizedSol} SOL`
+      : `${open.length} open · ${closed.length} closed · realized PnL needs exit size (not all sells store SOL out yet)`;
+
+  return {
+    openCount: open.length,
+    closedCount: closed.length,
+    realizedSol,
+    openEntrySol: Number(openEntrySol.toFixed(6)),
+    note
+  };
 }
 
 export function recordTrade(input: {
