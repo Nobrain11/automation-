@@ -2,7 +2,7 @@
 
 import { getSettings, updateSettings, getReferralStats, listWallets } from "../db/repositories.js";
 import { getRecentTokens, getScannerCounts } from "../db/scanner-repository.js";
-import { listOpenPositions, listRecentTrades } from "../db/positions.js";
+import { listOpenPositions, listRecentTrades, listClosedPositions, portfolioSummary } from "../db/positions.js";
 import { getAddress, getBalance, hasWallet } from "../services/wallet.js";
 import { buyToken, sellPosition } from "../services/trade.js";
 import {
@@ -204,12 +204,17 @@ export async function buildDashboard(telegramId: number) {
     active: Boolean(w.is_active)
   }));
 
-  const buyFailsToday = trades.filter(
-    (t) =>
-      t.side === "buy" &&
-      t.status === "failed" &&
-      t.createdAt >= Date.now() - 24 * 60 * 60 * 1000
-  ).length;
+  const closedPositions = listClosedPositions(telegramId, 30).map((p) => ({
+    id: p.id,
+    mint: p.mint,
+    symbol: p.symbol,
+    entrySol: p.entry_sol,
+    exitSol: p.exit_sol,
+    closedAt: p.closed_at,
+    signature: p.exit_signature
+  }));
+
+  const port = portfolioSummary(telegramId);
 
   return {
     wallet: {
@@ -263,13 +268,12 @@ export async function buildDashboard(telegramId: number) {
       : null,
     wallets,
     positions,
+    closedPositions,
     trades,
+    portfolio: port,
     pnl: {
-      todaySol: null as number | null,
-      note:
-        trades.length === 0
-          ? "No trades yet"
-          : `${trades.length} recent · ${positions.length} open · ${buyFailsToday} failed buys (24h)`
+      todaySol: port.realizedSol,
+      note: port.note
     }
   };
 }
@@ -345,7 +349,7 @@ export async function buildTrending() {
     newPairs,
     passed,
     source: movers.online ? "pump.fun" : "scanner-only",
-    note: "pump.fun top-runners + hot trades + new launches · micro-cap focus"
+    note: "mcap > $5k · ≤ $100k · liq ≥ $2k when known · pump.fun only"
   };
 }
 
