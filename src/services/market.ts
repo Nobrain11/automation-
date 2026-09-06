@@ -43,7 +43,8 @@ export interface MarketToken {
   replyCount?: number | null;
 }
 
-const MCAP_MIN = 2_000;
+/** Movers: never show mcap at or below $5k */
+const MCAP_MIN = 5_000;
 const MCAP_MAX = 100_000;
 const PREFERRED_MAX = 25_000;
 
@@ -122,7 +123,7 @@ function buildReview(coin: any, mcap: number | null): TokenReview {
   const risks: string[] = [];
 
   if (mcap != null) {
-    if (mcap >= 5_000 && mcap <= 15_000) {
+    if (mcap > 5_000 && mcap <= 15_000) {
       score += 22;
       labels.push("Micro-cap ~10k");
     } else if (mcap <= 40_000) {
@@ -197,7 +198,7 @@ function buildReview(coin: any, mcap: number | null): TokenReview {
 function spikeScore(coin: any, mcap: number | null): number {
   let s = 0;
   if (mcap != null) {
-    if (mcap >= 5_000 && mcap <= 15_000) s += 40;
+    if (mcap > 5_000 && mcap <= 15_000) s += 40;
     else if (mcap <= 30_000) s += 28;
     else if (mcap <= 80_000) s += 12;
     else if (mcap > 200_000) s -= 30;
@@ -225,6 +226,9 @@ function mapPumpCoin(raw: any, solUsd: number): MarketToken | null {
   if (coin?.is_banned) return null;
 
   const mcap = usdMcap(coin);
+  // Hard rule: never list movers at or below $5k mcap
+  if (mcap == null || mcap <= MCAP_MIN) return null;
+
   const created = createdMs(coin);
 
   const vSol = num(coin?.virtual_sol_reserves);
@@ -249,7 +253,6 @@ function mapPumpCoin(raw: any, solUsd: number): MarketToken | null {
   const liquidityUsd =
     solReserves != null ? solReserves * 2 * solUsd : null;
 
-  // Engagement proxy as activity signal when true volume API is unavailable
   const replies = num(coin?.reply_count) ?? 0;
   const volumeProxy =
     mcap != null && replies > 0
@@ -353,20 +356,17 @@ export async function fetchPumpMovers(): Promise<{
       }
     }
 
-    let tokens = [...byMint.values()];
-
-    const micro = tokens.filter((t) => {
+    // Always enforce mcap > $5k and <= max (no fallback to sub-$5k junk)
+    let tokens = [...byMint.values()].filter((t) => {
       const m = t.marketCap;
-      return m != null && m >= MCAP_MIN && m <= MCAP_MAX;
+      return m != null && m > MCAP_MIN && m <= MCAP_MAX;
     });
-
-    if (micro.length >= 5) tokens = micro;
 
     tokens.sort((a, b) => {
       const score = (t: MarketToken) => {
         const m = t.marketCap ?? 0;
         let s = t.spikeScore || 0;
-        if (m >= 5_000 && m <= PREFERRED_MAX) s += 20;
+        if (m > 5_000 && m <= PREFERRED_MAX) s += 20;
         return s;
       };
       return score(b) - score(a);
@@ -375,7 +375,7 @@ export async function fetchPumpMovers(): Promise<{
     const top = tokens.slice(0, 40);
     cacheMovers = { at: Date.now(), tokens: top };
     logger.info(
-      `pump.fun movers: ${top.length} tokens in ${Date.now() - started}ms`
+      `pump.fun movers: ${top.length} tokens (mcap > $${MCAP_MIN}) in ${Date.now() - started}ms`
     );
     return { online: top.length > 0, tokens: top };
   } catch (error) {
