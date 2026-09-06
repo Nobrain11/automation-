@@ -1,4 +1,4 @@
-/** Stronger TRADE screen: status line, last result, presets */
+/** Stronger TRADE screen: status, presets, full risk save, mint prefill */
 
 function renderTrade(d) {
   window.__lastDash = d;
@@ -7,6 +7,12 @@ function renderTrade(d) {
   const bal =
     w.balanceSol == null ? "—" : Number(w.balanceSol).toFixed(4) + " SOL";
   const last = window.__lastTradeResult;
+  const prefill =
+    (typeof location !== "undefined" &&
+      new URLSearchParams(location.search).get("mint")) ||
+    window.__prefillMint ||
+    "";
+
   const lastHtml = last
     ? `<div class="panel"><h2>LAST RESULT</h2>
         <div class="ws-meta ${last.ok ? "ok" : "bad"}">${last.ok ? "OK" : "FAILED"}
@@ -26,7 +32,7 @@ Default size ${s.maxBuy ?? "—"} SOL · Slip ${s.slippage ?? "—"}%</div>
     </div>
     <div class="panel">
       <h2>BUY BY MINT</h2>
-      <label class="field">Mint / CA<input id="inMint" type="text" placeholder="Token mint address" autocomplete="off" /></label>
+      <label class="field">Mint / CA<input id="inMint" type="text" placeholder="Token mint address" autocomplete="off" value="${prefill}" /></label>
       <div class="ht-presets">
         <button type="button" class="action ghost t-preset" data-amt="0.05">0.05</button>
         <button type="button" class="action ghost t-preset" data-amt="0.1">0.10</button>
@@ -44,15 +50,14 @@ Default size ${s.maxBuy ?? "—"} SOL · Slip ${s.slippage ?? "—"}%</div>
       <label class="field">Slippage %<input id="inSlip" type="number" step="1" value="${s.slippage ?? 20}" /></label>
       <label class="field">Stop loss %<input id="inSl" type="number" step="1" value="${s.stopLoss ?? 20}" /></label>
       <label class="field">Trailing after %<input id="inTrail" type="number" step="1" value="${s.trailingAfter ?? 30}" /></label>
+      <label class="field">Trailing pullback %<input id="inPull" type="number" step="1" value="${s.trailingPullback ?? 15}" /></label>
+      <label class="field">Time stop (min, 0=off)<input id="inTime" type="number" step="1" value="${s.timeStopMinutes ?? 30}" /></label>
       <label class="field">Daily cap (SOL)<input id="inCap" type="number" step="0.05" min="0" value="${s.dailyLossCap ?? 0.5}" /></label>
       <button type="button" class="action primary" id="btnSaveSettings">SAVE DEFAULTS</button>
     </div>`;
 }
 
-// Enhance buy handler after render
 (function () {
-  const origAfter = window.afterRender;
-  // Hook via interval on trade tab buttons
   setInterval(() => {
     document.querySelectorAll(".t-preset").forEach((btn) => {
       if (btn.dataset.bound) return;
@@ -64,20 +69,39 @@ Default size ${s.maxBuy ?? "—"} SOL · Slip ${s.slippage ?? "—"}%</div>
       });
     });
 
-    const buy = document.getElementById("btnManualBuy");
-    if (buy && !buy.dataset.deskBound) {
-      buy.dataset.deskBound = "1";
-      buy.addEventListener(
-        "click",
-        async (e) => {
-          // Let original also fire if present — we capture result by wrapping api later
-        },
-        true
-      );
+    // Extend save to include trail fields (runs alongside app.js handler)
+    const save = document.getElementById("btnSaveSettings");
+    if (save && !save.dataset.trailBound) {
+      save.dataset.trailBound = "1";
+      save.addEventListener("click", async () => {
+        const body = {
+          max_buy: Number(document.getElementById("inMaxBuy")?.value),
+          slippage: Number(document.getElementById("inSlip")?.value),
+          stop_loss: Number(document.getElementById("inSl")?.value),
+          trailing_after: Number(document.getElementById("inTrail")?.value),
+          trailing_pullback: Number(document.getElementById("inPull")?.value),
+          time_stop_minutes: Number(document.getElementById("inTime")?.value),
+          daily_loss_cap: Number(document.getElementById("inCap")?.value)
+        };
+        try {
+          if (typeof api === "function") {
+            const r = await api("/api/settings", {
+              method: "POST",
+              body: JSON.stringify(body)
+            });
+            const st = document.getElementById("tradeStatus");
+            if (st) {
+              st.textContent = r?.ok ? "Defaults saved" : r?.error || "Save failed";
+              st.className = r?.ok ? "ok" : "bad";
+            }
+          }
+        } catch (e) {
+          console.warn(e);
+        }
+      });
     }
   }, 500);
 
-  // Wrap api for trade result capture
   function hookApi() {
     if (typeof window.api !== "function" || window.api.__tradeHook) return;
     const orig = window.api;
