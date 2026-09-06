@@ -43,9 +43,9 @@ export interface MarketToken {
   replyCount?: number | null;
 }
 
-/** Movers: never show mcap at or below $5k */
-const MCAP_MIN = 5_000;
-const MCAP_MAX = 100_000;
+/** Movers list: exclude mcap at or below $5k */
+const MOVERS_MCAP_MIN = 5_000;
+const MOVERS_MCAP_MAX = 100_000;
 const PREFERRED_MAX = 25_000;
 
 let cacheMovers: { at: number; tokens: MarketToken[] } | null = null;
@@ -226,9 +226,6 @@ function mapPumpCoin(raw: any, solUsd: number): MarketToken | null {
   if (coin?.is_banned) return null;
 
   const mcap = usdMcap(coin);
-  // Hard rule: never list movers at or below $5k mcap
-  if (mcap == null || mcap <= MCAP_MIN) return null;
-
   const created = createdMs(coin);
 
   const vSol = num(coin?.virtual_sol_reserves);
@@ -261,7 +258,7 @@ function mapPumpCoin(raw: any, solUsd: number): MarketToken | null {
         ? replies * 80
         : null;
 
-  const token: MarketToken = {
+  return {
     mint,
     name: coin?.name ?? null,
     symbol: coin?.symbol ?? null,
@@ -294,7 +291,6 @@ function mapPumpCoin(raw: any, solUsd: number): MarketToken | null {
     complete: Boolean(coin?.complete),
     replyCount: replies
   };
-  return token;
 }
 
 async function pumpGet(path: string): Promise<any> {
@@ -356,10 +352,10 @@ export async function fetchPumpMovers(): Promise<{
       }
     }
 
-    // Always enforce mcap > $5k and <= max (no fallback to sub-$5k junk)
+    // Hard rule for movers: mcap must be ABOVE $5k and <= $100k
     let tokens = [...byMint.values()].filter((t) => {
       const m = t.marketCap;
-      return m != null && m > MCAP_MIN && m <= MCAP_MAX;
+      return m != null && m > MOVERS_MCAP_MIN && m <= MOVERS_MCAP_MAX;
     });
 
     tokens.sort((a, b) => {
@@ -375,7 +371,7 @@ export async function fetchPumpMovers(): Promise<{
     const top = tokens.slice(0, 40);
     cacheMovers = { at: Date.now(), tokens: top };
     logger.info(
-      `pump.fun movers: ${top.length} tokens (mcap > $${MCAP_MIN}) in ${Date.now() - started}ms`
+      `pump.fun movers: ${top.length} tokens (mcap > $${MOVERS_MCAP_MIN}) in ${Date.now() - started}ms`
     );
     return { online: top.length > 0, tokens: top };
   } catch (error) {
