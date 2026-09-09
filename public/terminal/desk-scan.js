@@ -1,21 +1,60 @@
 /**
- * Discover / SCAN surface — dense pro terminal cards (real data only).
- * Overrides tokenCard + renderTrending from app.js.
+ * Discover / SCAN — dense cards with clear AGE + VOL
  */
 
-function ageLabel(ms) {
+function ageLabel(t) {
+  // Prefer pairCreatedAt (ms), then discoveredAt, then ageSeconds
+  let ms = null;
+  if (t == null) return "—";
+  if (typeof t === "number") {
+    ms = t < 1e12 ? t * 1000 : t;
+  } else if (typeof t === "object") {
+    if (t.pairCreatedAt != null) {
+      const v = Number(t.pairCreatedAt);
+      ms = v < 1e12 ? v * 1000 : v;
+    } else if (t.discoveredAt != null) {
+      const v = Number(t.discoveredAt);
+      ms = v < 1e12 ? v * 1000 : v;
+    } else if (t.ageSeconds != null) {
+      const sec = Number(t.ageSeconds);
+      if (Number.isFinite(sec) && sec >= 0) {
+        if (sec < 60) return Math.max(1, Math.floor(sec)) + "s";
+        if (sec < 3600) return Math.floor(sec / 60) + "m";
+        if (sec < 86400) return Math.floor(sec / 3600) + "h";
+        return Math.floor(sec / 86400) + "d";
+      }
+    }
+  }
   if (ms == null || !Number.isFinite(ms)) return "—";
   const age = Date.now() - ms;
   if (age < 0) return "—";
-  const m = Math.floor(age / 60000);
+  const sec = Math.floor(age / 1000);
+  if (sec < 60) return sec + "s";
+  const m = Math.floor(sec / 60);
   if (m < 60) return m + "m";
   const h = Math.floor(m / 60);
   if (h < 48) return h + "h";
   return Math.floor(h / 24) + "d";
 }
 
+function volLabel(t) {
+  if (t.volume24h != null && Number(t.volume24h) > 0) {
+    return typeof fmtUsd === "function" ? fmtUsd(t.volume24h) : "$" + Number(t.volume24h).toFixed(0);
+  }
+  if (t.volume1h != null && Number(t.volume1h) > 0) {
+    return (typeof fmtUsd === "function" ? fmtUsd(t.volume1h) : "$" + Number(t.volume1h).toFixed(0)) + "/1h";
+  }
+  if (t.volume1mUsd != null && Number(t.volume1mUsd) > 0) {
+    return (typeof fmtUsd === "function" ? fmtUsd(t.volume1mUsd) : "$" + Number(t.volume1mUsd).toFixed(0)) + "/1m";
+  }
+  // engagement proxy from pump.fun replies when volume API missing
+  if (t.replyCount != null && Number(t.replyCount) > 0) {
+    return Number(t.replyCount) + " rpl";
+  }
+  return "—";
+}
+
 function pressurePct(t) {
-  // engagement proxy until true buy/sell counts exist
   const score = t.review?.score ?? t.spikeScore ?? 40;
   return Math.max(8, Math.min(92, Math.round(Number(score))));
 }
@@ -32,12 +71,8 @@ function tokenCard(t) {
       : t.liquiditySol != null
         ? Number(t.liquiditySol).toFixed(2) + " SOL"
         : "—";
-  const vol =
-    t.volume24h != null
-      ? fmtUsd(t.volume24h)
-      : t.volume1mUsd != null
-        ? fmtUsd(t.volume1mUsd)
-        : "—";
+  const vol = volLabel(t);
+  const age = ageLabel(t);
   const chgRaw =
     t.priceChange5m != null
       ? t.priceChange5m
@@ -45,10 +80,12 @@ function tokenCard(t) {
         ? t.priceChange1h
         : t.priceChange24h;
   const chg =
-    chgRaw != null ? fmtPct(chgRaw) : t.spikeScore != null ? "SCR " + Math.round(t.spikeScore) : "—";
-  const chgCls =
-    chgRaw == null ? "" : chgRaw >= 0 ? "up" : "down";
-  const age = ageLabel(t.pairCreatedAt ?? (t.discoveredAt ? Number(t.discoveredAt) : null));
+    chgRaw != null
+      ? fmtPct(chgRaw)
+      : t.spikeScore != null
+        ? "SCR " + Math.round(t.spikeScore)
+        : "—";
+  const chgCls = chgRaw == null ? "" : chgRaw >= 0 ? "up" : "down";
   const badge = t.complete ? "GRAD" : "PUMP";
   const initials = (sym || "??").slice(0, 2).toUpperCase();
   const img = t.imageUrl
@@ -65,14 +102,15 @@ function tokenCard(t) {
           <span class="desk-sym">${sym}</span>
           <span class="desk-badge">${badge}</span>
         </div>
-        <div class="desk-ca">${short(mint)} <button type="button" class="action ghost desk-copy" data-ca="${mint}" style="padding:2px 6px;font-size:9px">COPY</button></div>
+        <div class="desk-ca">${short(mint)} · <b style="color:var(--muted)">${age}</b> · vol <b style="color:var(--muted)">${vol}</b>
+          <button type="button" class="action ghost desk-copy" data-ca="${mint}" style="padding:2px 6px;font-size:9px">COPY</button>
+        </div>
       </div>
       <div class="desk-price-col">
         <div class="desk-price">${price}</div>
         <div class="desk-chg ${chgCls}">${chgRaw != null && chgRaw >= 0 ? "↗ " : chgRaw != null ? "↘ " : ""}${chg}</div>
       </div>
     </div>
-    <div class="desk-spark"><div class="desk-spark-note">APPROX · NOT LIVE OHLC</div></div>
     <div class="desk-metrics">
       <div><span>MCAP</span><b>${mcap}</b></div>
       <div><span>LIQ</span><b>${liq}</b></div>
@@ -109,7 +147,8 @@ function renderTrending(d, tr) {
           const c = t.priceChange5m ?? t.priceChange24h;
           const cls = c == null ? "" : c >= 0 ? "up" : "down";
           const pct = c != null ? fmtPct(c) : "—";
-          return `<span class="${cls}">${t.symbol || short(t.mint)} ${pct}</span>`;
+          const age = ageLabel(t);
+          return `<span class="${cls}">${t.symbol || short(t.mint)} ${pct} · ${age}</span>`;
         })
         .join("")
     : `<span>Waiting for pump.fun movers…</span>`;
@@ -134,7 +173,7 @@ function renderTrending(d, tr) {
         <span>·</span>
         <span>pump.fun</span>
         <span class="scan-pill">${filtered.length} shown</span>
-        <span>· mcap &gt; $5k</span>
+        <span>· mcap > $5k</span>
       </div>
       <div class="scan-tabs">
         ${cats
@@ -153,7 +192,6 @@ function renderTrending(d, tr) {
   document.addEventListener("input", (e) => {
     if (e.target?.id !== "scanSearch") return;
     window.__scanQ = e.target.value || "";
-    // soft re-render current trending if available
     if (state?.tab === "trending" && typeof setTab === "function") {
       clearTimeout(window.__scanQTimer);
       window.__scanQTimer = setTimeout(() => setTab("trending"), 180);
