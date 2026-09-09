@@ -17,6 +17,7 @@ import {
   resolveSession,
   verifyLoginToken
 } from "./auth.js";
+import { fetchSpark } from "../services/spark.js";
 import {
   buildActivity,
   buildDashboard,
@@ -31,35 +32,33 @@ import {
   startHunter,
   stopHunter
 } from "./api.js";
-import { resolvePublicTerminalDir } from "./paths.js";
-
-const PUBLIC_DIR = resolvePublicTerminalDir();
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".svg": "image/svg+xml",
-  ".json": "application/json"
+  ".png": "image/png",
+  ".ico": "image/x-icon",
+  ".json": "application/json",
+  ".woff2": "font/woff2"
 };
 
-function send(
-  res: ServerResponse,
-  status: number,
-  body: string | Buffer,
-  type = "text/plain; charset=utf-8",
-  extraHeaders: Record<string, string> = {}
-) {
+function sendJson(res: ServerResponse, status: number, body: unknown) {
+  const data = JSON.stringify(body);
   res.writeHead(status, {
-    "Content-Type": type,
-    "Cache-Control": "no-store",
-    ...extraHeaders
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store"
   });
-  res.end(body);
+  res.end(data);
 }
 
-function sendJson(res: ServerResponse, status: number, data: unknown) {
-  send(res, status, JSON.stringify(data), "application/json; charset=utf-8");
+function sendText(res: ServerResponse, status: number, body: string, type: string) {
+  res.writeHead(status, {
+    "Content-Type": type,
+    "Cache-Control": "no-store"
+  });
+  res.end(body);
 }
 
 async function readBody(req: IncomingMessage): Promise<string> {
@@ -70,47 +69,19 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-function sessionFromReq(req: IncomingMessage): number | null {
+function requireAuth(req: IncomingMessage, res: ServerResponse): number | null {
   const cookies = parseCookies(req.headers.cookie);
-  return resolveSession(cookies["pa_session"]);
-}
-
-async function serveStatic(res: ServerResponse, urlPath: string) {
-  let rel = urlPath === "/" || urlPath === "" ? "/index.html" : urlPath;
-  if (rel.includes("..")) {
-    send(res, 400, "Bad path");
-    return;
-  }
-  const filePath = join(PUBLIC_DIR, rel.replace(/^\//, ""));
-  try {
-    const data = await readFile(filePath);
-    const type = MIME[extname(filePath)] || "application/octet-stream";
-    send(res, 200, data, type);
-  } catch {
-    try {
-      const data = await readFile(join(PUBLIC_DIR, "index.html"));
-      send(res, 200, data, "text/html; charset=utf-8");
-    } catch {
-      send(res, 404, `Terminal UI not found. Looked in: ${PUBLIC_DIR}`);
-    }
-  }
-}
-
-function requireAuth(
-  req: IncomingMessage,
-  res: ServerResponse
-): number | null {
-  const id = sessionFromReq(req);
-  if (!id) {
-    sendJson(res, 401, { error: "unauthorized" });
+  const session = resolveSession(cookies.sid);
+  if (!session) {
+    sendJson(res, 401, { ok: false, error: "unauthorized" });
     return null;
   }
-  return id;
+  return session.telegramId;
 }
 
-export function startWebServer(): void {
-  const port = config.webPort;
-  logger.info(`Terminal static dir: ${PUBLIC_DIR}`);
+export function startWebServer() {
+  const publicDir = join(process.cwd(), "public", "terminal");
+  const rootPublic = join(process.cwd(), "public");
 
   const server = createServer(async (req, res) => {
     try {
@@ -118,30 +89,58 @@ export function startWebServer(): void {
       const url = new URL(req.url || "/", `http://${host}`);
       const path = url.pathname;
 
-      if (path === "/auth/callback" && req.method === "GET") {
+      // health
+      if (path === "/health" || path === "/api/health") {
+        const dbPath = getResolvedDatabasePath();
+        sendJson(res, 200, {
+          ok: true,
+          dbPath,
+          walletRows: countAllWallets(),
+          persistentVolume: dbPath.startsWith("/data"),
+          rpcHost: (() => {
+            try {
+              return new URL(config.solanaRpcUrl).host;
+            } catch {
+              return "unknown";
+            }
+          })(),
+          webBaseUrl: config.webBaseUrl,
+          scanner: scanner.getStats(),
+          httpDiscovery: {
+            polls: httpDiscovery.polls,
+            saved: httpDiscovery.saved,
+            lastAt: httpDiscovery.lastAt,
+            seen: httpDiscovery.seenSize,
+            running: httpDiscovery.running
+          },
+          hint: dbPath.startsWith("/data")
+            ? "Volume OK — wallets stored"
+            : "Attach Railway volume at /data"
+        });
+        return;
+      }
+
+      // auth login via telegram token
+      if (path === "/auth/telegram" && req.method === "GET") {
         const token = url.searchParams.get("token") || "";
-        const telegramId = verifyLoginToken(token);
-        if (!telegramId) {
-          send(
-            res,
-            401,
-            "Login link expired or invalid. Open a new link from the Telegram bot."
-          );
+        const verified = verifyLoginToken(token);
+        if (!verified) {
+          sendText(res, 401, "Invalid or expired link", "text/plain");
           return;
         }
-        const session = createSession(telegramId);
-        const secure = config.webBaseUrl.startsWith("https") ? "; Secure" : "";
-        send(res, 302, "", "text/plain", {
+        const sid = createSession(verified.telegramId);
+        res.writeHead(302, {
           Location: "/",
-          "Set-Cookie": `pa_session=${session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 3600}${secure}`
+          "Set-Cookie": `sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`
         });
+        res.end();
         return;
       }
 
       if (path === "/api/me" && req.method === "GET") {
         const id = requireAuth(req, res);
         if (!id) return;
-        sendJson(res, 200, { telegramId: id });
+        sendJson(res, 200, { ok: true, telegramId: id });
         return;
       }
 
@@ -155,14 +154,14 @@ export function startWebServer(): void {
       if (path === "/api/activity" && req.method === "GET") {
         const id = requireAuth(req, res);
         if (!id) return;
-        sendJson(res, 200, buildActivity(40));
+        sendJson(res, 200, buildActivity());
         return;
       }
 
       if (path === "/api/pulse" && req.method === "GET") {
         const id = requireAuth(req, res);
         if (!id) return;
-        sendJson(res, 200, buildPulse(30));
+        sendJson(res, 200, buildPulse());
         return;
       }
 
@@ -178,6 +177,14 @@ export function startWebServer(): void {
         if (!id) return;
         const mint = url.searchParams.get("mint") || "";
         sendJson(res, 200, await getTokenTerminal(id, mint));
+        return;
+      }
+
+      if (path === "/api/spark" && req.method === "GET") {
+        const id = requireAuth(req, res);
+        if (!id) return;
+        const mint = url.searchParams.get("mint") || "";
+        sendJson(res, 200, await fetchSpark(mint));
         return;
       }
 
@@ -212,7 +219,7 @@ export function startWebServer(): void {
       if (path === "/api/settings" && req.method === "POST") {
         const id = requireAuth(req, res);
         if (!id) return;
-        let body: Record<string, unknown> = {};
+        let body: any = {};
         try {
           body = JSON.parse(await readBody(req));
         } catch {
@@ -253,61 +260,39 @@ export function startWebServer(): void {
 
       if (path === "/api/logout" && req.method === "POST") {
         const cookies = parseCookies(req.headers.cookie);
-        if (cookies["pa_session"]) destroySession(cookies["pa_session"]);
-        send(res, 200, JSON.stringify({ ok: true }), "application/json", {
-          "Set-Cookie": "pa_session=; Path=/; HttpOnly; Max-Age=0"
+        destroySession(cookies.sid);
+        res.writeHead(200, {
+          "Content-Type": "application/json",
+          "Set-Cookie": "sid=; Path=/; HttpOnly; Max-Age=0"
         });
+        res.end(JSON.stringify({ ok: true }));
         return;
       }
 
-      if (path === "/health") {
-        const dbPath = getResolvedDatabasePath();
-        const wallets = countAllWallets();
-        const persistent = dbPath.startsWith("/data");
-        let rpcHost = "?";
-        try {
-          rpcHost = new URL(config.rpcUrl).host;
-        } catch {
-          /* ignore */
-        }
-        const sc = scanner.getStats();
-        const http = httpDiscovery.getStats();
-        sendJson(res, 200, {
-          ok: true,
-          dbPath,
-          walletRows: wallets,
-          persistentVolume: persistent,
-          rpcHost,
-          webBaseUrl: config.webBaseUrl || null,
-          scanner: {
-            wsRunning: sc.running,
-            discovered: sc.discovered,
-            evaluated: sc.evaluated,
-            passed: sc.passed,
-            reconnects: sc.websocketReconnects
-          },
-          httpDiscovery: http,
-          hint: persistent
-            ? wallets > 0
-              ? "Volume OK — wallets stored"
-              : "Volume OK — no wallets yet (create once in Telegram)"
-            : "NO /data volume — wallets wipe on every deploy. Mount volume at /data"
-        });
-        return;
+      // static files
+      let filePath = path === "/" ? join(publicDir, "index.html") : join(publicDir, path);
+      // also allow /logo.svg from root public
+      if (path === "/logo.svg" || path === "/favicon.svg") {
+        filePath = join(rootPublic, path.slice(1));
       }
-
-      await serveStatic(res, path);
-    } catch (error) {
-      logger.error("Web server error", error);
-      sendJson(res, 500, { error: "internal" });
+      try {
+        const data = await readFile(filePath);
+        const type = MIME[extname(filePath)] || "application/octet-stream";
+        res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-cache" });
+        res.end(data);
+      } catch {
+        sendText(res, 404, "Not found", "text/plain");
+      }
+    } catch (e) {
+      logger.error("web error", e);
+      sendJson(res, 500, { ok: false, error: "server error" });
     }
   });
 
+  const port = Number(process.env.PORT || 3000);
   server.listen(port, "0.0.0.0", () => {
     logger.info(`Web terminal listening on 0.0.0.0:${port}`);
   });
 
-  server.on("error", (err) => {
-    logger.error("HTTP server failed to bind", err);
-  });
+  return server;
 }
