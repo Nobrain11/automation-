@@ -1,6 +1,5 @@
 /**
- * HOME — market-first trading desk (not a settings page).
- * Rank-ready surface: pulse → opportunities → actions → risk strip.
+ * HOME — market-first trading desk
  */
 
 function homeMovers(limit) {
@@ -109,6 +108,11 @@ function renderHome(d) {
     ? `<button type="button" class="action ghost" id="btnClearKill">CLEAR KILL</button>`
     : `<button type="button" class="action ghost" id="btnEmergency">KILL</button>`;
 
+  const ref = d.referral;
+  const refChip = ref?.code
+    ? `<span class="home-chip">REF ${ref.referredCount ?? 0}</span>`
+    : "";
+
   return `
     <div class="home-desk">
       ${homeTickerHtml()}
@@ -119,6 +123,7 @@ function renderHome(d) {
           <span>${online ? "LIVE" : "…"}</span>
           <span class="dim">pump.fun</span>
           ${huntChip}
+          ${refChip}
         </div>
         <div class="home-status-right">
           <span>SOL ${sol} ${solChg}</span>
@@ -153,13 +158,16 @@ function renderHome(d) {
         <button type="button" class="action" data-go="trade">Trade</button>
         <button type="button" class="action" data-go="positions">Positions</button>
         <button type="button" class="action ghost" data-menu="pnl">Portfolio</button>
-        <button type="button" class="action ghost" data-menu="risk">Settings</button>
+        <button type="button" class="action ghost" data-menu="referral">Referral</button>
       </div>
     </div>`;
 }
 
 function renderMenu(d) {
   window.__lastDash = d;
+  if (state.menuView === "referral") {
+    if (typeof renderReferral === "function") return renderReferral(d);
+  }
   if (state.menuView === "pnl" || state.menuView === "portfolio") {
     if (typeof renderPortfolio === "function") return renderPortfolio(d);
   }
@@ -211,6 +219,7 @@ Trades ${s.maxTradesHour ?? "—"}/hr · ${s.maxTradesDay ?? "—"}/day</div>
       <button type="button" class="action" data-menu="wallet">Wallets</button>
       <button type="button" class="action" data-menu="activity">Activity</button>
       <button type="button" class="action" data-menu="pnl">Portfolio</button>
+      <button type="button" class="action" data-menu="referral">Referral</button>
       <button type="button" class="action ghost" data-go="home">← Home</button>
     </div></div>`;
 }
