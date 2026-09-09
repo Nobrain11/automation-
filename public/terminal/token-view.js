@@ -1,4 +1,4 @@
-/** Token Terminal v2 — polished detail + real OHLCV spark when available */
+/** Token Terminal v2 — polished detail + real OHLCV via /api/spark */
 
 function fmtUsdLocal(n) {
   if (n == null || Number.isNaN(Number(n))) return "—";
@@ -48,34 +48,12 @@ async function apiCall(path, opts) {
   return res.json();
 }
 
-/** Real candles from GeckoTerminal (public). Not DexScreener movers. */
 async function fetchSparkCloses(mint) {
   try {
-    const poolsRes = await fetch(
-      `https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}/pools?page=1`,
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if (!poolsRes.ok) return null;
-    const poolsJson = await poolsRes.json();
-    const pool = poolsJson?.data?.[0];
-    const poolId = pool?.id; // e.g. solana_xxx
-    if (!poolId) return null;
-    const addr = poolId.includes("_") ? poolId.split("_").slice(1).join("_") : poolId;
-    const ohlcvRes = await fetch(
-      `https://api.geckoterminal.com/api/v2/networks/solana/pools/${addr}/ohlcv/minute?aggregate=5&limit=48`,
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if (!ohlcvRes.ok) return null;
-    const ohlcvJson = await ohlcvRes.json();
-    // list of [ts, open, high, low, close, volume]
-    const list = ohlcvJson?.data?.attributes?.ohlcv_list || [];
-    if (!list.length) return null;
-    const closes = list.map((row) => Number(row[4])).filter((n) => Number.isFinite(n) && n > 0);
-    if (closes.length < 3) return null;
-    return { closes, pool: addr, source: "geckoterminal" };
-  } catch {
-    return null;
-  }
+    const r = await apiCall("/api/spark?mint=" + encodeURIComponent(mint));
+    if (r && r.ok && r.closes && r.closes.length >= 3) return r;
+  } catch {}
+  return null;
 }
 
 function svgSpark(closes, w = 320, h = 88) {
@@ -116,6 +94,7 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
   if (!ws || !mint) return;
 
   const backTab = opts.backTab || state?.tab || "trending";
+  window.__lastTokenMint = mint;
   ws.innerHTML = `<div class="panel"><div class="empty">Loading token…</div></div>`;
 
   let data;
@@ -228,7 +207,7 @@ SL ${settings.stopLoss != null ? settings.stopLoss + "%" : "—"}</div>
 
       <div class="panel">
         <h2>Chart · 5m</h2>
-        <div id="ttSpark"><div class="empty">Loading candles…</div></div>
+        <div id="ttSpark" data-mint="${mint}"><div class="empty">Loading candles…</div></div>
         <div class="muted" id="ttSparkNote" style="font-size:10px;margin-top:6px"></div>
       </div>
 
@@ -275,7 +254,6 @@ SL ${settings.stopLoss != null ? settings.stopLoss + "%" : "—"}</div>
 
   wireBack(ws);
 
-  // copy
   ws.querySelectorAll(".desk-copy").forEach((btn) => {
     btn.onclick = () => {
       const ca = btn.getAttribute("data-ca");
@@ -283,7 +261,6 @@ SL ${settings.stopLoss != null ? settings.stopLoss + "%" : "—"}</div>
     };
   });
 
-  // presets
   ws.querySelectorAll(".tt-preset").forEach((btn) => {
     btn.onclick = () => {
       const a = btn.getAttribute("data-amt");
@@ -292,7 +269,6 @@ SL ${settings.stopLoss != null ? settings.stopLoss + "%" : "—"}</div>
     };
   });
 
-  // buy
   const buyBtn = document.getElementById("ttBuy");
   if (buyBtn) {
     buyBtn.onclick = async () => {
@@ -321,7 +297,6 @@ SL ${settings.stopLoss != null ? settings.stopLoss + "%" : "—"}</div>
     };
   }
 
-  // sell handlers use existing global sell-btn wiring from app.js via refresh
   ws.querySelectorAll(".sell-btn").forEach((btn) => {
     btn.onclick = async () => {
       const id = Number(btn.closest(".pos-card")?.dataset?.id);
@@ -344,19 +319,21 @@ SL ${settings.stopLoss != null ? settings.stopLoss + "%" : "—"}</div>
     };
   });
 
-  // load real spark
   (async () => {
     const box = document.getElementById("ttSpark");
     const note = document.getElementById("ttSparkNote");
     const spark = await fetchSparkCloses(mint);
     if (!box) return;
     if (spark?.closes?.length) {
-      box.innerHTML = svgSpark(spark.closes);
+      box.innerHTML =
+        typeof svgSparkLine === "function"
+          ? svgSparkLine(spark.closes, 320, 88)
+          : svgSpark(spark.closes);
       if (note) {
         const first = spark.closes[0];
         const last = spark.closes[spark.closes.length - 1];
         const pct = first ? (((last - first) / first) * 100).toFixed(2) : "—";
-        note.textContent = `Real 5m OHLCV · ${spark.closes.length} pts · ${pct}% · GeckoTerminal pool`;
+        note.textContent = `Real 5m OHLCV · ${spark.closes.length} pts · ${pct}% · ${spark.source || "gecko"}`;
       }
     } else {
       box.innerHTML = `<div class="empty">No candle data for this pool yet</div>`;
