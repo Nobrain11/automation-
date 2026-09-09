@@ -71,12 +71,12 @@ async function readBody(req: IncomingMessage): Promise<string> {
 
 function requireAuth(req: IncomingMessage, res: ServerResponse): number | null {
   const cookies = parseCookies(req.headers.cookie);
-  const session = resolveSession(cookies.sid);
-  if (!session) {
+  const telegramId = resolveSession(cookies.sid);
+  if (!telegramId) {
     sendJson(res, 401, { ok: false, error: "unauthorized" });
     return null;
   }
-  return session.telegramId;
+  return telegramId;
 }
 
 export function startWebServer() {
@@ -89,7 +89,6 @@ export function startWebServer() {
       const url = new URL(req.url || "/", `http://${host}`);
       const path = url.pathname;
 
-      // health
       if (path === "/health" || path === "/api/health") {
         const dbPath = getResolvedDatabasePath();
         sendJson(res, 200, {
@@ -99,20 +98,14 @@ export function startWebServer() {
           persistentVolume: dbPath.startsWith("/data"),
           rpcHost: (() => {
             try {
-              return new URL(config.solanaRpcUrl).host;
+              return new URL(config.rpcUrl).host;
             } catch {
               return "unknown";
             }
           })(),
           webBaseUrl: config.webBaseUrl,
           scanner: scanner.getStats(),
-          httpDiscovery: {
-            polls: httpDiscovery.polls,
-            saved: httpDiscovery.saved,
-            lastAt: httpDiscovery.lastAt,
-            seen: httpDiscovery.seenSize,
-            running: httpDiscovery.running
-          },
+          httpDiscovery: httpDiscovery.getStats(),
           hint: dbPath.startsWith("/data")
             ? "Volume OK — wallets stored"
             : "Attach Railway volume at /data"
@@ -120,7 +113,6 @@ export function startWebServer() {
         return;
       }
 
-      // auth login via telegram token
       if (path === "/auth/telegram" && req.method === "GET") {
         const token = url.searchParams.get("token") || "";
         const verified = verifyLoginToken(token);
@@ -128,7 +120,7 @@ export function startWebServer() {
           sendText(res, 401, "Invalid or expired link", "text/plain");
           return;
         }
-        const sid = createSession(verified.telegramId);
+        const sid = createSession(verified);
         res.writeHead(302, {
           Location: "/",
           "Set-Cookie": `sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`
@@ -269,9 +261,7 @@ export function startWebServer() {
         return;
       }
 
-      // static files
       let filePath = path === "/" ? join(publicDir, "index.html") : join(publicDir, path);
-      // also allow /logo.svg from root public
       if (path === "/logo.svg" || path === "/favicon.svg") {
         filePath = join(rootPublic, path.slice(1));
       }
