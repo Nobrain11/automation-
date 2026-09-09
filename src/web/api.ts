@@ -1,6 +1,6 @@
 // src/web/api.ts — terminal JSON API (real data only)
 
-import { getSettings, updateSettings, getReferralStats, listWallets } from "../db/repositories.js";
+import { getSettings, updateSettings, getReferralStats, listWallets, ensureReferral } from "../db/repositories.js";
 import { getRecentTokens, getScannerCounts } from "../db/scanner-repository.js";
 import { listOpenPositions, listRecentTrades, listClosedPositions, portfolioSummary } from "../db/positions.js";
 import { getAddress, getBalance, hasWallet } from "../services/wallet.js";
@@ -148,7 +148,9 @@ export async function buildDashboard(telegramId: number) {
   }
   const stats = scanner.getStats();
   const dbCounts = getScannerCounts();
+  ensureReferral(telegramId, null);
   const ref = getReferralStats(telegramId);
+  const botUser = (process.env.TELEGRAM_BOT_USERNAME || process.env.BOT_USERNAME || "").replace(/^@/, "");
   const sol = await fetchSolPrice();
 
   const openRows = listOpenPositions(telegramId);
@@ -263,7 +265,12 @@ export async function buildDashboard(telegramId: number) {
       ? {
           code: ref.code,
           referredCount: ref.referredCount,
-          totalEarnedSol: ref.totalEarnedSol
+          totalEarnedSol: ref.totalEarnedSol,
+          commissionRate: ref.commissionRate,
+          botUsername: botUser || null,
+          telegramLink: botUser
+            ? `https://t.me/${botUser}?start=ref_${ref.code}`
+            : null
         }
       : null,
     wallets,
