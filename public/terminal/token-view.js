@@ -1,4 +1,4 @@
-/** Auto-Hunter Token Terminal — layout matches desk mockup, real data only */
+/** Token Terminal v2 — polished detail + real OHLCV spark when available */
 
 function fmtUsdLocal(n) {
   if (n == null || Number.isNaN(Number(n))) return "—";
@@ -15,7 +15,7 @@ function shortLocal(a) {
   return a.slice(0, 4) + "…" + a.slice(-4);
 }
 
-function ageLabel(hours) {
+function ageLabelHours(hours) {
   if (hours == null) return "—";
   if (hours < 1) return Math.max(1, Math.round(hours * 60)) + "m";
   if (hours < 24) return hours.toFixed(1) + "h";
@@ -23,10 +23,10 @@ function ageLabel(hours) {
 }
 
 function checkClass(status) {
-  if (status === "safe" || status === "pass") return "chk-safe";
-  if (status === "warn" || status === "skip") return "chk-warn";
-  if (status === "bad" || status === "fail") return "chk-bad";
-  return "chk-unk";
+  if (status === "safe" || status === "pass") return "ok";
+  if (status === "warn" || status === "skip") return "";
+  if (status === "bad" || status === "fail") return "bad";
+  return "";
 }
 
 function checkMark(status) {
@@ -48,12 +48,75 @@ async function apiCall(path, opts) {
   return res.json();
 }
 
+/** Real candles from GeckoTerminal (public). Not DexScreener movers. */
+async function fetchSparkCloses(mint) {
+  try {
+    const poolsRes = await fetch(
+      `https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}/pools?page=1`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (!poolsRes.ok) return null;
+    const poolsJson = await poolsRes.json();
+    const pool = poolsJson?.data?.[0];
+    const poolId = pool?.id; // e.g. solana_xxx
+    if (!poolId) return null;
+    const addr = poolId.includes("_") ? poolId.split("_").slice(1).join("_") : poolId;
+    const ohlcvRes = await fetch(
+      `https://api.geckoterminal.com/api/v2/networks/solana/pools/${addr}/ohlcv/minute?aggregate=5&limit=48`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (!ohlcvRes.ok) return null;
+    const ohlcvJson = await ohlcvRes.json();
+    // list of [ts, open, high, low, close, volume]
+    const list = ohlcvJson?.data?.attributes?.ohlcv_list || [];
+    if (!list.length) return null;
+    const closes = list.map((row) => Number(row[4])).filter((n) => Number.isFinite(n) && n > 0);
+    if (closes.length < 3) return null;
+    return { closes, pool: addr, source: "geckoterminal" };
+  } catch {
+    return null;
+  }
+}
+
+function svgSpark(closes, w = 320, h = 88) {
+  if (!closes || closes.length < 2) return "";
+  const min = Math.min(...closes);
+  const max = Math.max(...closes);
+  const span = max - min || max * 0.01 || 1;
+  const pad = 4;
+  const pts = closes.map((c, i) => {
+    const x = pad + (i / (closes.length - 1)) * (w - pad * 2);
+    const y = h - pad - ((c - min) / span) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const up = closes[closes.length - 1] >= closes[0];
+  const stroke = up ? "#1dff9a" : "#ff4d62";
+  const fill = up ? "rgba(29,255,154,0.12)" : "rgba(255,77,98,0.12)";
+  const area = `${pad},${h - pad} ${pts.join(" ")} ${w - pad},${h - pad}`;
+  return `<svg class="v2-spark" viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" aria-hidden="true">
+    <polygon points="${area}" fill="${fill}" />
+    <polyline points="${pts.join(" ")}" fill="none" stroke="${stroke}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+  </svg>`;
+}
+
+function wireBack(ws) {
+  ws.querySelectorAll("[data-go]").forEach((el) => {
+    el.onclick = () => {
+      if (typeof setTab === "function") setTab(el.getAttribute("data-go"));
+    };
+  });
+}
+
+window.openToken = function openToken(mint) {
+  return window.openTokenTerminal(mint, { backTab: state?.tab || "trending" });
+};
+
 window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
   const ws = document.getElementById("workspace");
   if (!ws || !mint) return;
 
-  const backTab = opts.backTab || "trending";
-  ws.innerHTML = `<div class="panel"><div class="empty">Loading terminal…</div></div>`;
+  const backTab = opts.backTab || state?.tab || "trending";
+  ws.innerHTML = `<div class="panel"><div class="empty">Loading token…</div></div>`;
 
   let data;
   try {
@@ -72,7 +135,7 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
     return;
   }
 
-  const t = data.token;
+  const t = data.token || {};
   const m = data.market || {};
   const auto = data.automation || {};
   const checks = data.checks || [];
@@ -80,306 +143,224 @@ window.openTokenTerminal = async function openTokenTerminal(mint, opts = {}) {
   const trades = data.yourTrades || [];
   const settings = data.settings || {};
   const milestones = data.filterMilestones || [];
-  const summary = data.filterSummary;
-  const solBal =
-    data.sol && window.__lastDash?.wallet?.balanceSol != null
-      ? Number(window.__lastDash.wallet.balanceSol).toFixed(2)
-      : null;
+  const maxBuy = settings.maxBuy ?? 0.1;
 
   const img = t.imageUrl
-    ? `<img class="tt-logo" src="${t.imageUrl}" alt="" onerror="this.style.display='none'" />`
-    : `<div class="tt-logo ph">$</div>`;
-
-  const score = auto.hunterScore ?? "—";
-  const risk = auto.risk || "—";
-
-  const insightLines = checks
-    .filter((c) => c.status === "safe" || c.status === "warn" || c.status === "bad")
-    .slice(0, 5)
-    .map((c) => {
-      const mark = checkMark(c.status);
-      return `<div class="insight ${checkClass(c.status)}">${mark} ${c.label}: ${c.detail}</div>`;
-    })
-    .join("");
-
-  const msHtml = milestones.length
-    ? milestones
-        .map(
-          (c, i) =>
-            `<div class="tt-check ${checkClass(c.status)}">
-          <span class="mk">${i + 1}</span>
-          <span class="lb">${checkMark(c.status)} ${c.label}</span>
-          <span class="dt">${c.detail}</span>
-        </div>`
-        )
-        .join("")
-    : "";
+    ? `<img class="desk-avatar" src="${t.imageUrl}" alt="" onerror="this.outerHTML='<div class=\\'desk-avatar\\'>${(t.symbol || "??").slice(0, 2)}</div>'" />`
+    : `<div class="desk-avatar">${(t.symbol || "??").slice(0, 2)}</div>`;
 
   const posHtml = pos.open
     ? pos.positions
         .map(
           (p) =>
             `<div class="pos-card" data-id="${p.id}">
-              <div class="ht-grid">
-                <div><span>ENTRY</span><b>${p.entrySol} SOL</b></div>
-                <div><span>SIZE</span><b>${p.entrySol} SOL</b></div>
-                <div><span>TP</span><b>${settings.stopLoss != null ? "on" : "—"}</b></div>
-                <div><span>SL</span><b>${settings.stopLoss != null ? settings.stopLoss + "%" : "—"}</b></div>
-              </div>
-              <div class="pos-meta">${shortLocal(p.signature)} · ${new Date(p.createdAt).toLocaleString()}</div>
-              <button type="button" class="action danger sell-btn full">SELL POSITION</button>
+              <div class="pos-top">Entry ${p.entrySol} SOL</div>
+              <div class="pos-meta">${shortLocal(p.signature)} · ${new Date(p.createdAt).toLocaleString()}
+SL ${settings.stopLoss != null ? settings.stopLoss + "%" : "—"}</div>
+              <button type="button" class="action danger sell-btn full">SELL 100%</button>
             </div>`
         )
         .join("")
-    : `<div class="empty">No open position</div>`;
+    : `<div class="empty">No open position on this token</div>`;
 
   const actHtml = trades.length
     ? trades
         .slice(0, 12)
         .map((tr) => {
           const side = String(tr.side || "").toUpperCase();
-          const ok = side === "BUY" ? "ok" : "bad";
-          return `<div class="tape-row"><span class="${ok}">${side === "BUY" ? "🟢" : "🔴"} ${side}</span><span>${tr.amountSol ?? "—"} SOL</span><span class="muted">${tr.status || ""}</span></div>`;
+          const cls = side === "BUY" ? "ok" : "bad";
+          return `<div class="feed-line"><span class="${cls}">${side}</span> · ${tr.amountSol ?? "—"} SOL · ${tr.status || ""}</div>`;
         })
         .join("")
-    : `<div class="empty">No activity yet</div>`;
+    : `<div class="empty">No trades on this token yet</div>`;
 
-  const maxBuy = settings.maxBuy ?? 0.1;
+  const msHtml = milestones.length
+    ? milestones
+        .map(
+          (c) =>
+            `<div class="feed-line ${checkClass(c.status)}">${checkMark(c.status)} ${c.label} — ${c.detail}</div>`
+        )
+        .join("")
+    : `<div class="empty">No scanner milestones for this mint</div>`;
+
+  const insightHtml = checks.length
+    ? checks
+        .slice(0, 8)
+        .map(
+          (c) =>
+            `<div class="feed-line ${checkClass(c.status)}">${checkMark(c.status)} ${c.label}: ${c.detail}</div>`
+        )
+        .join("")
+    : "";
 
   ws.innerHTML = `
-    <div class="ht">
-      <div class="ht-bar">
-        <button type="button" class="action ghost" data-go="${backTab}">←</button>
-        <div class="ht-bar-mid">
-          <div class="ht-title">AUTO-HUNTER</div>
-          <div class="ht-live">● ${auto.qualified ? "READY" : "LIVE"}</div>
-        </div>
-        <div class="ht-bal">${solBal != null ? solBal + " SOL" : "—"}</div>
+    <div class="tt-v2">
+      <div class="tt-topbar">
+        <button type="button" class="action ghost" data-go="${backTab}">← Back</button>
+        <div class="tt-top-title">TOKEN</div>
+        <a class="action ghost" href="${t.pairUrl || "https://pump.fun/coin/" + mint}" target="_blank" rel="noopener">pump.fun</a>
       </div>
 
-      <div class="panel ht-search-wrap">
-        <input id="htSearch" class="ht-search" type="text" placeholder="Search token / paste mint" value="${t.mint}" />
-        <button type="button" class="action" id="htGo">GO</button>
-      </div>
-
-      <div class="panel ht-token">
-        <div class="ht-token-top">
+      <div class="panel">
+        <div class="desk-card-top">
           ${img}
-          <div class="ht-token-id">
-            <div class="tt-sym">$${t.symbol || "???"}</div>
-            <div class="tt-name">${t.name || "—"}</div>
+          <div style="flex:1;min-width:0">
+            <div class="desk-name-row">
+              <span class="desk-name">$${t.symbol || "???"}</span>
+              <span class="desk-sym">${t.name || ""}</span>
+            </div>
+            <div class="desk-ca">${shortLocal(t.mint || mint)}
+              <button type="button" class="action ghost desk-copy" data-ca="${t.mint || mint}" style="padding:2px 6px;font-size:9px">COPY</button>
+            </div>
           </div>
-          <div class="ht-score">
-            <div class="ht-score-n">${score}</div>
-            <div class="ht-score-l">HUNTER</div>
+          <div class="desk-price-col">
+            <div class="desk-price">${fmtUsdLocal(m.priceUsd)}</div>
+            <div class="muted" style="font-size:10px">${auto.hunterScore != null ? "HS " + auto.hunterScore : ""}</div>
           </div>
         </div>
-        <div class="ht-metrics">
-          <div><span>MC</span><b>${fmtUsdLocal(m.marketCapUsd)}</b></div>
-          <div><span>LIQ</span><b>${m.liquidityUsd != null ? fmtUsdLocal(m.liquidityUsd) : m.liquiditySol != null ? m.liquiditySol.toFixed(2) + " SOL" : "—"}</b></div>
+        <div class="desk-metrics">
+          <div><span>MCAP</span><b>${fmtUsdLocal(m.marketCapUsd)}</b></div>
+          <div><span>LIQ</span><b>${m.liquidityUsd != null ? fmtUsdLocal(m.liquidityUsd) : m.liquiditySol != null ? Number(m.liquiditySol).toFixed(2) + " SOL" : "—"}</b></div>
           <div><span>VOL</span><b>${m.volume24h != null ? fmtUsdLocal(m.volume24h) : "—"}</b></div>
-          <div><span>AGE</span><b>${ageLabel(t.ageHours)}</b></div>
-        </div>
-        <div class="tt-price">
-          <div class="px">${fmtUsdLocal(m.priceUsd)}</div>
-          <div class="muted">${m.priceSol != null ? m.priceSol.toExponential(3) + " SOL" : ""}</div>
+          <div><span>AGE</span><b>${ageLabelHours(t.ageHours)}</b></div>
         </div>
       </div>
 
       <div class="panel">
-        <h2>PRICE CHART</h2>
-        <div class="empty">${data.chart?.note || "Chart not available"}</div>
-        <div class="row" style="margin-top:8px">
-          <a class="action ghost" href="${t.pairUrl}" target="_blank" rel="noopener">Open on pump.fun</a>
-          <a class="action ghost" href="${t.explorerUrl}" target="_blank" rel="noopener">Explorer</a>
-        </div>
-      </div>
-
-      <div class="panel ht-buy">
-        <div class="ht-tabs">
-          <button type="button" class="chip active" data-side="buy">BUY</button>
-          <button type="button" class="chip" data-side="sell">SELL</button>
-          <button type="button" class="chip" data-side="act">ACTIVITY</button>
-        </div>
-        <div id="htBuyPad">
-          <div class="ht-presets">
-            <button type="button" class="action ghost preset" data-amt="0.05">0.05</button>
-            <button type="button" class="action ghost preset" data-amt="0.10">0.10</button>
-            <button type="button" class="action ghost preset" data-amt="0.25">0.25</button>
-            <button type="button" class="action ghost preset" data-amt="${maxBuy}">MAX</button>
-          </div>
-          <label class="field">CUSTOM AMOUNT (SOL)
-            <input id="htAmt" type="number" step="0.01" min="0" value="${maxBuy}" />
-          </label>
-          <button type="button" class="action primary full" id="ttBuy">BUY $${t.symbol || shortLocal(t.mint)}</button>
-        </div>
-        <div id="htSellPad" class="hidden">
-          ${posHtml}
-        </div>
-        <div id="htActPad" class="hidden">
-          <div class="tape">${actHtml}</div>
-        </div>
+        <h2>Chart · 5m</h2>
+        <div id="ttSpark"><div class="empty">Loading candles…</div></div>
+        <div class="muted" id="ttSparkNote" style="font-size:10px;margin-top:6px"></div>
       </div>
 
       <div class="panel">
-        <h2>HUNTER ANALYSIS</h2>
-        <div class="ht-grid">
-          <div><span>HUNTER SCORE</span><b>${score}/100</b></div>
-          <div><span>MOMENTUM</span><b>${auto.momentum || "—"}</b></div>
-          <div><span>STRATEGY FIT</span><b>${auto.strategyFit || "—"}</b></div>
-          <div><span>RISK</span><b>${risk}</b></div>
+        <h2>Buy</h2>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <button type="button" class="action ghost tt-preset" data-amt="0.05">0.05</button>
+          <button type="button" class="action ghost tt-preset" data-amt="0.1">0.10</button>
+          <button type="button" class="action ghost tt-preset" data-amt="0.25">0.25</button>
+          <button type="button" class="action ghost tt-preset" data-amt="${maxBuy}">DEF</button>
         </div>
-        <div class="insights">${insightLines || '<div class="empty">No signals</div>'}</div>
+        <label class="field">Amount SOL
+          <input id="ttAmt" type="number" step="0.01" min="0" value="${maxBuy}" />
+        </label>
+        <button type="button" class="action primary full" id="ttBuy">BUY $${t.symbol || shortLocal(mint)}</button>
+        <div id="ttStatus" class="muted" style="margin-top:8px;font-family:var(--v2-mono,monospace);font-size:11px"></div>
       </div>
 
-      ${milestones.length ? `<div class="panel"><h2>FILTER MILESTONES${summary ? ` · ${summary.pass} pass · ${summary.fail} fail` : ""}</h2><div class="tt-checks">${msHtml}</div></div>` : ""}
-
       <div class="panel">
-        <h2>POSITION</h2>
-        <div class="ht-grid">
-          <div><span>TP TRAIL AFTER</span><b>${settings.trailingAfter != null ? settings.trailingAfter + "%" : "—"}</b></div>
-          <div><span>PULLBACK</span><b>${settings.trailingPullback != null ? settings.trailingPullback + "%" : "—"}</b></div>
-          <div><span>STOP LOSS</span><b>${settings.stopLoss != null ? settings.stopLoss + "%" : "—"}</b></div>
-          <div><span>MAX BUY</span><b>${settings.maxBuy != null ? settings.maxBuy + " SOL" : "—"}</b></div>
-        </div>
+        <h2>Your position</h2>
         ${posHtml}
       </div>
 
       <div class="panel">
-        <h2>LIVE ACTIVITY</h2>
-        <div class="tape">${actHtml}</div>
+        <h2>Checks</h2>
+        ${insightHtml || msHtml}
       </div>
 
-      <div class="tt-ca">
-        <code>${t.mint}</code>
-        <button type="button" class="action ghost" id="ttCopy">COPY CA</button>
+      <div class="panel">
+        <h2>Filter milestones</h2>
+        ${msHtml}
+      </div>
+
+      <div class="panel">
+        <h2>Activity</h2>
+        ${actHtml}
+      </div>
+
+      <div class="row">
+        <a class="action ghost" href="${t.explorerUrl || "https://solscan.io/token/" + mint}" target="_blank" rel="noopener">Explorer</a>
+        <button type="button" class="action ghost" data-go="${backTab}">← Back</button>
       </div>
     </div>`;
 
   wireBack(ws);
 
-  document.getElementById("htGo")?.addEventListener("click", () => {
-    const v = document.getElementById("htSearch")?.value?.trim();
-    if (v && v.length >= 32) openTokenTerminal(v, { backTab });
+  // copy
+  ws.querySelectorAll(".desk-copy").forEach((btn) => {
+    btn.onclick = () => {
+      const ca = btn.getAttribute("data-ca");
+      if (ca) navigator.clipboard?.writeText(ca).catch(() => prompt("CA", ca));
+    };
   });
 
-  document.querySelectorAll("[data-side]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll("[data-side]").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      const side = btn.getAttribute("data-side");
-      document.getElementById("htBuyPad")?.classList.toggle("hidden", side !== "buy");
-      document.getElementById("htSellPad")?.classList.toggle("hidden", side !== "sell");
-      document.getElementById("htActPad")?.classList.toggle("hidden", side !== "act");
-    });
+  // presets
+  ws.querySelectorAll(".tt-preset").forEach((btn) => {
+    btn.onclick = () => {
+      const a = btn.getAttribute("data-amt");
+      const input = document.getElementById("ttAmt");
+      if (input && a) input.value = a;
+    };
   });
 
-  document.querySelectorAll(".preset").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const amt = btn.getAttribute("data-amt");
-      const input = document.getElementById("htAmt");
-      if (input && amt) input.value = amt;
-    });
-  });
-
-  document.getElementById("ttCopy")?.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(t.mint);
-      const b = document.getElementById("ttCopy");
-      if (b) {
-        b.textContent = "COPIED";
-        setTimeout(() => (b.textContent = "COPY CA"), 1200);
+  // buy
+  const buyBtn = document.getElementById("ttBuy");
+  if (buyBtn) {
+    buyBtn.onclick = async () => {
+      const amt = Number(document.getElementById("ttAmt")?.value);
+      const st = document.getElementById("ttStatus");
+      if (!(amt > 0)) {
+        if (st) st.textContent = "Enter amount";
+        return;
       }
-    } catch {
-      prompt("Copy mint", t.mint);
-    }
-  });
+      if (st) st.textContent = "Submitting…";
+      try {
+        const r = await apiCall("/api/trade/buy", {
+          method: "POST",
+          body: JSON.stringify({ mint, amountSol: amt, symbol: t.symbol })
+        });
+        if (st) {
+          st.textContent = r?.ok
+            ? "OK " + (r.signature || "")
+            : r?.error || "Failed";
+          st.className = r?.ok ? "ok" : "bad";
+        }
+        if (r?.ok && typeof refresh === "function") refresh();
+      } catch (e) {
+        if (st) st.textContent = String(e.message || e);
+      }
+    };
+  }
 
-  document.getElementById("ttBuy")?.addEventListener("click", async () => {
-    const amt = Number(document.getElementById("htAmt")?.value);
-    const label = Number.isFinite(amt) && amt > 0 ? amt + " SOL" : "Max Buy";
-    if (!confirm(`Buy $${t.symbol || shortLocal(t.mint)} for ${label}?`)) return;
-    const btn = document.getElementById("ttBuy");
-    if (btn) btn.disabled = true;
-    try {
-      const body = { mint: t.mint, symbol: t.symbol };
-      if (Number.isFinite(amt) && amt > 0) body.amountSol = amt;
-      const r = await apiCall("/api/trade/buy", {
-        method: "POST",
-        body: JSON.stringify(body)
-      });
-      if (r.ok) {
-        alert("Submitted: " + (r.signature || "ok"));
-        openTokenTerminal(t.mint, { backTab });
-      } else alert(r.error || "Buy failed");
-    } catch (e) {
-      alert(String(e.message || e));
-    } finally {
-      if (btn) btn.disabled = false;
-    }
-  });
-
+  // sell handlers use existing global sell-btn wiring from app.js via refresh
   ws.querySelectorAll(".sell-btn").forEach((btn) => {
     btn.onclick = async () => {
-      const id = Number(btn.closest(".pos-card")?.dataset.id);
+      const id = Number(btn.closest(".pos-card")?.dataset?.id);
       if (!id) return;
-      if (!confirm("Sell 100% of this position?")) return;
       btn.disabled = true;
       try {
         const r = await apiCall("/api/trade/sell", {
           method: "POST",
           body: JSON.stringify({ positionId: id })
         });
-        if (r.ok) {
-          alert("Sell submitted: " + (r.signature || "ok"));
-          openTokenTerminal(t.mint, { backTab });
-        } else alert(r.error || "Sell failed");
+        const st = document.getElementById("ttStatus");
+        if (st) {
+          st.textContent = r?.ok ? "Sold " + (r.signature || "") : r?.error || "Sell failed";
+          st.className = r?.ok ? "ok" : "bad";
+        }
+        if (r?.ok) openTokenTerminal(mint, opts);
       } catch (e) {
-        alert(String(e.message || e));
-      } finally {
         btn.disabled = false;
       }
     };
   });
+
+  // load real spark
+  (async () => {
+    const box = document.getElementById("ttSpark");
+    const note = document.getElementById("ttSparkNote");
+    const spark = await fetchSparkCloses(mint);
+    if (!box) return;
+    if (spark?.closes?.length) {
+      box.innerHTML = svgSpark(spark.closes);
+      if (note) {
+        const first = spark.closes[0];
+        const last = spark.closes[spark.closes.length - 1];
+        const pct = first ? (((last - first) / first) * 100).toFixed(2) : "—";
+        note.textContent = `Real 5m OHLCV · ${spark.closes.length} pts · ${pct}% · GeckoTerminal pool`;
+      }
+    } else {
+      box.innerHTML = `<div class="empty">No candle data for this pool yet</div>`;
+      if (note) note.textContent = "Chart appears when a pool has public OHLCV";
+    }
+  })();
 };
-
-function wireBack(root) {
-  root.querySelectorAll("[data-go]").forEach((el) => {
-    el.onclick = () => {
-      const tab = el.getAttribute("data-go");
-      const btn = document.querySelector(`.nav-btn[data-tab="${tab}"]`);
-      if (btn) btn.click();
-    };
-  });
-}
-
-function hookTokenButtons() {
-  document.querySelectorAll(".tok-analyze").forEach((btn) => {
-    if (btn.dataset.ttHooked) return;
-    btn.dataset.ttHooked = "1";
-    btn.addEventListener(
-      "click",
-      (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        const mint = btn.closest(".token")?.dataset.mint;
-        if (mint) openTokenTerminal(mint, { backTab: "trending" });
-      },
-      true
-    );
-  });
-  document.querySelectorAll(".token-head").forEach((head) => {
-    if (head.dataset.ttHooked) return;
-    head.dataset.ttHooked = "1";
-    head.style.cursor = "pointer";
-    head.addEventListener("click", (e) => {
-      if (e.target.closest("button")) return;
-      const mint = head.closest(".token")?.dataset.mint;
-      if (mint) openTokenTerminal(mint, { backTab: "trending" });
-    });
-  });
-}
-
-setInterval(hookTokenButtons, 800);
-document.addEventListener("DOMContentLoaded", hookTokenButtons);
