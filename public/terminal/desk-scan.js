@@ -1,9 +1,8 @@
 /**
- * Discover / SCAN — dense cards with clear AGE + VOL
+ * Discover / SCAN — dense cards with AGE + VOL + mini spark slots
  */
 
 function ageLabel(t) {
-  // Prefer pairCreatedAt (ms), then discoveredAt, then ageSeconds
   let ms = null;
   if (t == null) return "—";
   if (typeof t === "number") {
@@ -47,7 +46,6 @@ function volLabel(t) {
   if (t.volume1mUsd != null && Number(t.volume1mUsd) > 0) {
     return (typeof fmtUsd === "function" ? fmtUsd(t.volume1mUsd) : "$" + Number(t.volume1mUsd).toFixed(0)) + "/1m";
   }
-  // engagement proxy from pump.fun replies when volume API missing
   if (t.replyCount != null && Number(t.replyCount) > 0) {
     return Number(t.replyCount) + " rpl";
   }
@@ -59,7 +57,7 @@ function pressurePct(t) {
   return Math.max(8, Math.min(92, Math.round(Number(score))));
 }
 
-function tokenCard(t) {
+function tokenCard(t, idx) {
   const sym = t.symbol || "???";
   const name = t.name || sym;
   const mint = t.mint || "";
@@ -92,6 +90,11 @@ function tokenCard(t) {
     ? `<img class="desk-avatar" src="${t.imageUrl}" alt="" onerror="this.outerHTML='<div class=\\'desk-avatar\\'>${initials}</div>'" />`
     : `<div class="desk-avatar">${initials}</div>`;
   const p = pressurePct(t);
+  // only first 6 cards request spark (rate limits)
+  const spark =
+    idx != null && idx < 6
+      ? `<div class="card-spark" data-mint="${mint}" style="height:36px;margin:8px 0 4px"></div>`
+      : "";
 
   return `<article class="desk-card token" data-mint="${mint}">
     <div class="desk-card-top">
@@ -111,6 +114,7 @@ function tokenCard(t) {
         <div class="desk-chg ${chgCls}">${chgRaw != null && chgRaw >= 0 ? "↗ " : chgRaw != null ? "↘ " : ""}${chg}</div>
       </div>
     </div>
+    ${spark}
     <div class="desk-metrics">
       <div><span>MCAP</span><b>${mcap}</b></div>
       <div><span>LIQ</span><b>${liq}</b></div>
@@ -161,7 +165,7 @@ function renderTrending(d, tr) {
   ];
 
   const list = filtered.length
-    ? filtered.map((t) => tokenCard(t)).join("")
+    ? filtered.map((t, i) => tokenCard(t, i)).join("")
     : `<div class="empty">No tokens match this filter right now.</div>`;
 
   return `
