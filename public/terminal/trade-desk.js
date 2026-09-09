@@ -1,4 +1,4 @@
-/** Stronger TRADE screen: status, presets, full risk save, mint prefill */
+/** TRADE — product shell */
 
 function renderTrade(d) {
   window.__lastDash = d;
@@ -14,38 +14,52 @@ function renderTrade(d) {
     "";
 
   const lastHtml = last
-    ? `<div class="panel"><h2>LAST RESULT</h2>
-        <div class="ws-meta ${last.ok ? "ok" : "bad"}">${last.ok ? "OK" : "FAILED"}
-${last.route ? "Route: " + last.route : ""}
-${last.signature ? "Sig: " + last.signature : ""}
-${last.error || ""}</div>
-        ${last.signature ? `<a class="action ghost" href="https://solscan.io/tx/${last.signature}" target="_blank" rel="noopener">View on Solscan</a>` : ""}
+    ? `<div class="panel">
+        <h2>Last result</h2>
+        <div class="ws-meta ${last.ok ? "ok" : "bad"}">${last.ok ? "Submitted" : "Failed"}
+${last.route ? "Route · " + last.route : ""}
+${last.signature || last.error || ""}</div>
+        ${
+          last.signature
+            ? `<a class="action ghost" href="https://solscan.io/tx/${last.signature}" target="_blank" rel="noopener">Solscan</a>`
+            : ""
+        }
       </div>`
     : "";
 
   return `
-    <div class="panel">
-      <h1>TRADE</h1>
-      <div class="ws-meta">Wallet ${w.connected ? short(w.address || "") : "not linked"}
-Balance ${bal}
-Default size ${s.maxBuy ?? "—"} SOL · Slip ${s.slippage ?? "—"}%</div>
+    <div class="panel cmd-hero">
+      <div class="cmd-kicker">EXECUTE</div>
+      <div class="cmd-title">Trade</div>
+      <p class="cmd-sub">Manual buy by mint. PumpPortal first, Jupiter fallback. Mainnet only.</p>
+      <div class="cmd-grid">
+        <div class="cmd-stat"><span>BALANCE</span><b>${bal}</b></div>
+        <div class="cmd-stat"><span>DEFAULT</span><b>${s.maxBuy ?? "—"} SOL</b></div>
+      </div>
     </div>
+
     <div class="panel">
-      <h2>BUY BY MINT</h2>
-      <label class="field">Mint / CA<input id="inMint" type="text" placeholder="Token mint address" autocomplete="off" value="${prefill}" /></label>
-      <div class="ht-presets">
+      <h2>Buy</h2>
+      <label class="field">Mint / CA
+        <input id="inMint" type="text" placeholder="Token mint" autocomplete="off" value="${prefill}" />
+      </label>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
         <button type="button" class="action ghost t-preset" data-amt="0.05">0.05</button>
         <button type="button" class="action ghost t-preset" data-amt="0.1">0.10</button>
         <button type="button" class="action ghost t-preset" data-amt="0.25">0.25</button>
-        <button type="button" class="action ghost t-preset" data-amt="${s.maxBuy ?? 0.1}">MAX</button>
+        <button type="button" class="action ghost t-preset" data-amt="${s.maxBuy ?? 0.1}">DEF</button>
       </div>
-      <label class="field">Amount SOL<input id="inAmt" type="number" step="0.01" min="0" value="${s.maxBuy ?? 0.1}" /></label>
+      <label class="field">Amount SOL
+        <input id="inAmt" type="number" step="0.01" min="0" value="${s.maxBuy ?? 0.1}" />
+      </label>
       <button type="button" class="action primary full" id="btnManualBuy">BUY</button>
       <div id="tradeStatus" class="muted" style="margin-top:8px;font-family:var(--mono);font-size:11px"></div>
     </div>
+
     ${lastHtml}
+
     <div class="panel">
-      <h2>RISK DEFAULTS</h2>
+      <h2>Risk defaults</h2>
       <label class="field">Max buy (SOL)<input id="inMaxBuy" type="number" step="0.01" min="0" value="${s.maxBuy ?? 0.1}" /></label>
       <label class="field">Slippage %<input id="inSlip" type="number" step="1" value="${s.slippage ?? 20}" /></label>
       <label class="field">Stop loss %<input id="inSl" type="number" step="1" value="${s.stopLoss ?? 20}" /></label>
@@ -69,7 +83,6 @@ Default size ${s.maxBuy ?? "—"} SOL · Slip ${s.slippage ?? "—"}%</div>
       });
     });
 
-    // Extend save to include trail fields (runs alongside app.js handler)
     const save = document.getElementById("btnSaveSettings");
     if (save && !save.dataset.trailBound) {
       save.dataset.trailBound = "1";
