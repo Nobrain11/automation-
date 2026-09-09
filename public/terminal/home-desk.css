@@ -1,0 +1,130 @@
+/* Market-first HOME */
+
+.home-desk {
+  padding-bottom: 8px;
+}
+
+.home-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.home-status-left,
+.home-status-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.home-status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dim);
+  display: inline-block;
+}
+.home-status .dot.on {
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(34, 232, 154, 0.5);
+}
+.home-status .dim {
+  color: var(--dim);
+}
+
+.home-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.home-chip.on {
+  border-color: var(--green-border);
+  color: var(--green);
+  background: var(--green-dim);
+}
+.home-chip.kill {
+  border-color: rgba(255, 93, 108, 0.4);
+  color: var(--red);
+}
+
+.home-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.home-metrics div {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 6px;
+  text-align: center;
+}
+.home-metrics span {
+  display: block;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+.home-metrics b {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.home-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0 10px;
+}
+.home-section-head h2 {
+  margin: 0 !important;
+  font-family: var(--mono) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.14em !important;
+  color: var(--dim) !important;
+  text-transform: uppercase;
+}
+
+.home-hunter {
+  margin-top: 8px !important;
+}
+.home-hunter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.home-hunter-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+.home-hunter-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.home-quick-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@media (max-width: 380px) {
+  .home-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

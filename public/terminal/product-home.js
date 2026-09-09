@@ -1,4 +1,71 @@
-/** Unified command home — one clean product surface */
+/**
+ * HOME — market-first trading desk (not a settings page).
+ * Rank-ready surface: pulse → opportunities → actions → risk strip.
+ */
+
+function homeMovers(limit) {
+  const tr = window.state?.trending || window.__lastDash?.trending || null;
+  const list =
+    tr?.movers ||
+    tr?.trending ||
+    tr?.scored ||
+    [];
+  return Array.isArray(list) ? list.slice(0, limit) : [];
+}
+
+function homeTickerHtml() {
+  const items = homeMovers(10);
+  if (!items.length) {
+    return `<div class="scan-ticker"><span>Loading pump.fun movers…</span></div>`;
+  }
+  return `<div class="scan-ticker">${items
+    .map((t) => {
+      const c = t.priceChange5m ?? t.priceChange24h;
+      const cls = c == null ? "" : c >= 0 ? "up" : "down";
+      const pct =
+        typeof fmtPct === "function" && c != null
+          ? fmtPct(c)
+          : c != null
+            ? (c >= 0 ? "+" : "") + Number(c).toFixed(1) + "%"
+            : "—";
+      return `<span class="${cls}">${t.symbol || short(t.mint)} ${pct}</span>`;
+    })
+    .join("")}</div>`;
+}
+
+function homeCard(t) {
+  if (typeof tokenCard === "function") return tokenCard(t);
+  const price =
+    t.priceUsd != null && typeof fmtUsd === "function"
+      ? fmtUsd(t.priceUsd)
+      : t.priceUsd != null
+        ? "$" + Number(t.priceUsd).toPrecision(4)
+        : "—";
+  const mcap =
+    t.marketCap != null && typeof fmtUsd === "function"
+      ? fmtUsd(t.marketCap)
+      : "—";
+  return `<article class="desk-card token" data-mint="${t.mint}">
+    <div class="desk-card-top">
+      <div class="desk-avatar">${(t.symbol || "??").slice(0, 2)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="desk-name-row">
+          <span class="desk-name">${t.name || t.symbol || "Token"}</span>
+          <span class="desk-sym">${t.symbol || ""}</span>
+        </div>
+        <div class="desk-ca">${short(t.mint)}</div>
+      </div>
+      <div class="desk-price-col">
+        <div class="desk-price">${price}</div>
+        <div class="desk-chg">MC ${mcap}</div>
+      </div>
+    </div>
+    <div class="desk-actions" style="margin-top:10px">
+      <button type="button" class="desk-quick tok-buy">Quick Buy</button>
+      <button type="button" class="desk-icon-btn tok-open">◎</button>
+    </div>
+  </article>`;
+}
 
 function renderHome(d) {
   window.__lastDash = d;
@@ -11,84 +78,83 @@ function renderHome(d) {
   const bal =
     d.wallet?.balanceSol == null
       ? "—"
-      : Number(d.wallet.balanceSol).toFixed(4) + " SOL";
-  const balUsd =
-    d.wallet?.balanceUsd != null
-      ? "$" + Number(d.wallet.balanceUsd).toFixed(2)
-      : "";
+      : Number(d.wallet.balanceSol).toFixed(3);
   const sol =
     d.sol?.price != null ? "$" + Number(d.sol.price).toFixed(2) : "—";
-  const pnlNote = d.portfolio?.note || d.pnl?.note || "No positions yet";
+  const solChg =
+    d.sol?.change24h != null
+      ? (d.sol.change24h >= 0 ? "+" : "") +
+        Number(d.sol.change24h).toFixed(1) +
+        "%"
+      : "";
 
-  const walletLine = connected
-    ? short(d.wallet.address || "")
-    : "Not linked — open Telegram bot to create/import";
+  const movers = homeMovers(4);
+  const online = Boolean(window.state?.trending?.online ?? movers.length);
+
+  const moverHtml = movers.length
+    ? movers.map(homeCard).join("")
+    : `<div class="empty">Fetching pump.fun movers…</div>`;
+
+  const huntChip = huntOn
+    ? `<span class="home-chip on">HUNTER ON</span>`
+    : h.killSwitch
+      ? `<span class="home-chip kill">KILL</span>`
+      : `<span class="home-chip">HUNTER OFF</span>`;
 
   const autoBtn = huntOn
-    ? `<button type="button" class="action danger full" id="btnHomeStopHunt">STOP HUNTER</button>`
-    : `<button type="button" class="action primary full" id="btnHomeStartHunt">START HUNTER</button>`;
+    ? `<button type="button" class="action danger" id="btnHomeStopHunt">STOP</button>`
+    : `<button type="button" class="action primary" id="btnHomeStartHunt">START HUNTER</button>`;
 
   const killBtn = h.killSwitch
-    ? `<button type="button" class="action" id="btnClearKill">CLEAR KILL</button>`
-    : `<button type="button" class="action danger" id="btnEmergency">EMERGENCY STOP</button>`;
-
-  const trades = d.trades || [];
-  const act = trades.length
-    ? trades
-        .slice(0, 5)
-        .map((t) => {
-          const tms = new Date(t.createdAt).toLocaleTimeString();
-          return `<div class="feed-line"><b>${tms}</b> · ${String(t.side).toUpperCase()} ${t.status} · ${t.amountSol} SOL · ${short(t.mint)}</div>`;
-        })
-        .join("")
-    : `<div class="empty">No trades yet — use SCAN or TRADE</div>`;
+    ? `<button type="button" class="action ghost" id="btnClearKill">CLEAR KILL</button>`
+    : `<button type="button" class="action ghost" id="btnEmergency">KILL</button>`;
 
   return `
-    <div class="panel cmd-hero">
-      <div class="cmd-kicker">PUMP AUTO</div>
-      <div class="cmd-title">Command</div>
-      <p class="cmd-sub">Discover pump.fun movers, execute with risk limits, manage positions from one desk.</p>
-      <div class="cmd-grid">
-        <div class="cmd-stat"><span>SOL</span><b>${sol}</b></div>
-        <div class="cmd-stat"><span>BALANCE</span><b>${bal}</b></div>
-        <div class="cmd-stat"><span>HUNTER</span><b>${huntOn ? "ON" : h.killSwitch ? "KILL" : "OFF"}</b></div>
-        <div class="cmd-stat"><span>OPEN</span><b>${posCount}</b></div>
+    <div class="home-desk">
+      ${homeTickerHtml()}
+
+      <div class="home-status">
+        <div class="home-status-left">
+          <span class="dot ${online ? "on" : ""}"></span>
+          <span>${online ? "LIVE" : "…"}</span>
+          <span class="dim">pump.fun</span>
+          ${huntChip}
+        </div>
+        <div class="home-status-right">
+          <span>SOL ${sol} ${solChg}</span>
+          <span>${connected ? bal + " SOL" : "No wallet"}</span>
+        </div>
       </div>
-    </div>
 
-    <div class="panel">
-      <h2>Wallet</h2>
-      <div class="ws-meta">${walletLine}
-${balUsd ? "≈ " + balUsd : ""}</div>
-    </div>
-
-    <div class="panel">
-      <h2>Auto-Hunter</h2>
-      ${autoBtn}
-      <div class="row" style="margin-top:8px">${killBtn}</div>
-      <div class="ws-meta" style="margin-top:10px">Size ${s.maxBuy ?? "—"} SOL · SL ${s.stopLoss ?? "—"}% · Trail ${s.trailingAfter ?? "—"}%
-${s.maxTradesHour ?? "—"}/hr · ${s.maxTradesDay ?? "—"}/day · Cap ${s.dailyLossCap ?? "—"} SOL
-Scanner ${sc.running ? "live" : "off"} · passed ${sc.passed ?? 0}</div>
-    </div>
-
-    <div class="panel">
-      <h2>Go</h2>
-      <div class="cmd-grid">
-        <button type="button" class="action" data-go="trending">SCAN</button>
-        <button type="button" class="action" data-go="trade">TRADE</button>
-        <button type="button" class="action" data-go="positions">POSITIONS</button>
-        <button type="button" class="action ghost" data-menu="pnl">PORTFOLIO</button>
+      <div class="home-metrics">
+        <div><span>OPEN</span><b>${posCount}</b></div>
+        <div><span>PASSED</span><b>${sc.passed ?? 0}</b></div>
+        <div><span>SIZE</span><b>${s.maxBuy ?? "—"}</b></div>
+        <div><span>SL</span><b>${s.stopLoss ?? "—"}%</b></div>
       </div>
-    </div>
 
-    <div class="panel">
-      <h2>Portfolio note</h2>
-      <div class="ws-meta">${pnlNote}</div>
-    </div>
+      <div class="home-section-head">
+        <h2>Opportunities</h2>
+        <button type="button" class="action ghost" data-go="trending">View all</button>
+      </div>
+      ${moverHtml}
 
-    <div class="panel">
-      <h2>Recent activity</h2>
-      ${act}
+      <div class="panel home-hunter">
+        <div class="home-hunter-row">
+          <div>
+            <div class="home-hunter-title">Auto-Hunter</div>
+            <div class="muted" style="font-size:11px">${s.maxTradesHour ?? "—"}/hr · ${s.maxTradesDay ?? "—"}/day · cap ${s.dailyLossCap ?? "—"} SOL</div>
+          </div>
+          <div class="home-hunter-actions">${autoBtn}${killBtn}</div>
+        </div>
+      </div>
+
+      <div class="home-quick-row">
+        <button type="button" class="action" data-go="trade">Trade</button>
+        <button type="button" class="action" data-go="positions">Positions</button>
+        <button type="button" class="action ghost" data-menu="pnl">Portfolio</button>
+        <button type="button" class="action ghost" data-menu="risk">Settings</button>
+      </div>
     </div>`;
 }
 
