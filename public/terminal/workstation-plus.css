@@ -1,0 +1,119 @@
+/* Extra density + status bar — visual only, loaded after workstation.css */
+
+.ws-status {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  height: 28px;
+  padding: 0 16px;
+  background: var(--ws-bg-1, #080a0e);
+  border-top: 1px solid var(--ws-line, #1c2430);
+  font-family: var(--ws-mono, monospace);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--ws-text-3, #667487);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+@media (min-width: 960px) {
+  .app {
+    grid-template-rows: var(--ws-header-h, 48px) 1fr 28px !important;
+    grid-template-areas:
+      "side header"
+      "side main"
+      "side status" !important;
+  }
+
+  .ws-status {
+    grid-area: status;
+    display: flex !important;
+  }
+
+  /* prefer real status bar over ::after label */
+  .app::after {
+    content: none !important;
+    display: none !important;
+  }
+}
+
+.ws-st-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ws-st-right {
+  margin-left: auto;
+}
+
+.ws-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #667487;
+  display: inline-block;
+}
+
+.ws-dot.on {
+  background: #1dff9a;
+  box-shadow: 0 0 6px rgba(29, 255, 154, 0.45);
+}
+
+.ws-dot.off {
+  background: #ff4d62;
+}
+
+/* Quieter decorative gradients from older layers */
+.cmd-hero {
+  background: var(--ws-bg-2, #0c0f14) !important;
+}
+
+/* Tighter list density */
+.desk-card {
+  margin-bottom: 8px !important;
+}
+
+.panel {
+  margin-bottom: 8px !important;
+}
+
+/* Align table-like metrics without nested card chrome */
+.desk-metrics {
+  gap: 0 !important;
+}
+
+.desk-metrics > div {
+  border-right: 1px solid var(--ws-line, #1c2430) !important;
+  border-radius: 0 !important;
+  padding: 2px 4px !important;
+}
+
+.desk-metrics > div:last-child {
+  border-right: 0 !important;
+}
+
+/* Sidebar active indicator bar */
+@media (min-width: 960px) {
+  .side-btn.active {
+    box-shadow: inset 2px 0 0 #1dff9a;
+  }
+}
+
+/* Reduce oversized empty states */
+.empty {
+  padding: 16px 12px !important;
+}
+
+/* Compact top bar metrics separators */
+.top-metrics span:not(:last-child)::after {
+  content: "·";
+  margin-left: 10px;
+  color: #2a3444;
+  font-weight: 400;
+}
+
+.top-metrics .top-gear::after {
+  content: none !important;
+}
