@@ -9,49 +9,34 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/logo.svg" />
   <title>PUMP AUTO</title>
-  <link rel="stylesheet" href="/styles.css" />
-  <link rel="stylesheet" href="/extra.css" />
-  <link rel="stylesheet" href="/hunter.css" />
-  <link rel="stylesheet" href="/shell.css" />
-  <link rel="stylesheet" href="/product.css" />
-  <link rel="stylesheet" href="/funnel.css" />
-  <link rel="stylesheet" href="/nav-polish.css" />
-  <link rel="stylesheet" href="/nav-lean.css" />
-  <link rel="stylesheet" href="/desk-scan.css" />
-  <link rel="stylesheet" href="/product-shell.css" />
-  <link rel="stylesheet" href="/home-desk.css" />
-  <link rel="stylesheet" href="/v2.css" />
-  <link rel="stylesheet" href="/token-v2.css" />
-  <link rel="stylesheet" href="/workstation.css" />
-  <link rel="stylesheet" href="/workstation-plus.css" />
+  <!-- One design system only — previous multi-CSS stack caused visual chaos -->
+  <link rel="stylesheet" href="/terminal.css" />
 </head>
 <body>
   <div id="intro" class="intro hidden" aria-hidden="true">
     <div class="intro-mark">
       <img src="/logo.svg" width="56" height="56" alt="" />
-      <div class="intro-title">PUMP <span>AUTO</span></div>
+      <div class="intro-title">PUMP <span style="color:#1dff9a">AUTO</span></div>
       <div class="intro-sub">SOLANA AUTOMATION TERMINAL</div>
     </div>
   </div>
 
   <div id="gate" class="gate">
-    <div class="gate-card gate-angled">
-      <img class="logo-img" src="/logo.svg" width="64" height="64" alt="PUMP AUTO" />
+    <div class="gate-card">
+      <img class="logo-img" src="/logo.svg" width="56" height="56" alt="PUMP AUTO" />
       <div class="logo">PUMP <span style="color:#1dff9a">AUTO</span></div>
-      <p class="gate-title">SOLANA AUTOMATION TERMINAL</p>
-      <p class="muted" style="text-align:center">Open from Telegram → <b>WEB TERMINAL</b></p>
-      <p class="muted" style="text-align:center;margin-top:8px;font-size:11px">Secure session · Real market data only</p>
+      <p class="gate-title muted">SOLANA AUTOMATION TERMINAL</p>
+      <p class="muted" style="text-align:center;margin-top:12px">Open from Telegram → <b>WEB TERMINAL</b></p>
+      <p class="muted" style="text-align:center;margin-top:8px;font-size:11px">Session link required · Real market data only</p>
     </div>
   </div>
 
   <div id="app" class="app hidden">
-    <div class="desk-bg" aria-hidden="true"></div>
-
     <aside class="side-nav" aria-label="Desktop navigation">
       <div class="side-brand">
-        <img src="/logo.svg" width="28" height="28" alt="" style="border-radius:7px" />
+        <img src="/logo.svg" width="28" height="28" alt="" style="border-radius:6px" />
         <div>
-          <div class="title">PUMP <span>AUTO</span></div>
+          <div class="title">PUMP <span style="color:#1dff9a">AUTO</span></div>
           <div class="sub">TERMINAL</div>
         </div>
       </div>
@@ -66,7 +51,7 @@
 
     <header class="topbar">
       <div class="brand">
-        <img class="logo-img sm" src="/logo.svg" width="26" height="26" alt="" />
+        <img class="logo-img sm" src="/logo.svg" width="22" height="22" alt="" />
         <div>
           <div class="brand-title">PUMP <span style="color:#1dff9a">AUTO</span></div>
           <div class="brand-sub">TERMINAL</div>
@@ -75,7 +60,7 @@
       <div class="top-metrics">
         <span id="solMetric">SOL —</span>
         <span id="balMetric">BAL —</span>
-        <span id="huntMetric" class="status-dot">● —</span>
+        <span id="huntMetric">● —</span>
         <button type="button" class="top-gear" id="btnTopSettings" title="Settings">⚙</button>
       </div>
     </header>
