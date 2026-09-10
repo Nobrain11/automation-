@@ -113,11 +113,17 @@ export function startWebServer() {
         return;
       }
 
-      if (path === "/auth/telegram" && req.method === "GET") {
+      // Login: bot used /auth/callback; server originally only had /auth/telegram
+      if ((path === "/auth/telegram" || path === "/auth/callback") && req.method === "GET") {
         const token = url.searchParams.get("token") || "";
         const verified = verifyLoginToken(token);
         if (!verified) {
-          sendText(res, 401, "Invalid or expired link", "text/plain");
+          sendText(
+            res,
+            401,
+            "Invalid or expired link. Open WEB TERMINAL again from the Telegram bot.",
+            "text/plain"
+          );
           return;
         }
         const sid = createSession(verified);
@@ -261,7 +267,6 @@ export function startWebServer() {
         return;
       }
 
-      // SPA routes — terminal lives at / and /terminal
       if (
         path === "/" ||
         path === "/terminal" ||
