@@ -9,12 +9,11 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/logo.svg" />
   <title>PUMP AUTO</title>
-  <!-- One design system only — previous multi-CSS stack caused visual chaos -->
   <link rel="stylesheet" href="/terminal.css" />
 </head>
 <body>
   <div id="intro" class="intro hidden" aria-hidden="true">
-    <div class="intro-mark">
+    <div class="intro-mark" style="text-align:center;padding:48px 16px">
       <img src="/logo.svg" width="56" height="56" alt="" />
       <div class="intro-title">PUMP <span style="color:#1dff9a">AUTO</span></div>
       <div class="intro-sub">SOLANA AUTOMATION TERMINAL</div>
@@ -25,7 +24,7 @@
     <div class="gate-card">
       <img class="logo-img" src="/logo.svg" width="56" height="56" alt="PUMP AUTO" />
       <div class="logo">PUMP <span style="color:#1dff9a">AUTO</span></div>
-      <p class="gate-title muted">SOLANA AUTOMATION TERMINAL</p>
+      <p class="muted" style="text-align:center">SOLANA AUTOMATION TERMINAL</p>
       <p class="muted" style="text-align:center;margin-top:12px">Open from Telegram → <b>WEB TERMINAL</b></p>
       <p class="muted" style="text-align:center;margin-top:8px;font-size:11px">Session link required · Real market data only</p>
     </div>
@@ -79,8 +78,8 @@
     </nav>
   </div>
 
+  <!-- Core + screens only. Dropped duplicate nav-fix/nav-lean/boot-fix overlays. -->
   <script src="/app.js"></script>
-  <script src="/card-metrics.js"></script>
   <script src="/desk-scan.js"></script>
   <script src="/desk-quickbuy.js"></script>
   <script src="/product-home.js"></script>
@@ -92,9 +91,6 @@
   <script src="/referral-ui.js"></script>
   <script src="/workstation-ui.js"></script>
   <script src="/shell-nav.js"></script>
-  <script src="/boot-fix.js"></script>
   <script src="/funnel.js"></script>
-  <script src="/nav-fix.js"></script>
-  <script src="/nav-lean.js"></script>
 </body>
 </html>
