@@ -261,7 +261,24 @@ export function startWebServer() {
         return;
       }
 
-      let filePath = path === "/" ? join(publicDir, "index.html") : join(publicDir, path);
+      // SPA routes — terminal lives at / and /terminal
+      if (
+        path === "/" ||
+        path === "/terminal" ||
+        path === "/terminal/" ||
+        path === "/app" ||
+        path === "/app/"
+      ) {
+        const data = await readFile(join(publicDir, "index.html"));
+        res.writeHead(200, {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-cache"
+        });
+        res.end(data);
+        return;
+      }
+
+      let filePath = join(publicDir, path);
       if (path === "/logo.svg" || path === "/favicon.svg") {
         filePath = join(rootPublic, path.slice(1));
       }
