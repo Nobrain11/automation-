@@ -1,4 +1,4 @@
-// src/bot/bot.ts — handlers must register at import time (index calls bot.start only)
+// src/bot/bot.ts — handlers register at import time
 
 import { Bot, Context, InlineKeyboard } from "grammy";
 
@@ -16,7 +16,6 @@ import {
 import { logger } from "../utils/logger.js";
 import {
   createWallet,
-  exportPrivateKey,
   getAddress,
   getBalance,
   hasWallet,
@@ -31,14 +30,13 @@ import {
   walletKeyboard
 } from "./keyboards.js";
 import {
-  helpText,
+  helpHomeText,
   homeText,
   portfolioText,
   positionsText,
   referralText,
   settingsText,
-  statusText,
-  walletText
+  statusText
 } from "./screens.js";
 
 export const bot = new Bot(config.botToken);
@@ -109,7 +107,23 @@ function requireUser(ctx: Context): number {
   return id;
 }
 
-/** Register all handlers on the shared bot instance */
+async function walletSummary(telegramId: number): Promise<string> {
+  const address = getAddress(telegramId);
+  if (!address) {
+    return (
+      `👛 <b>WALLET</b>\n\nNo wallet connected.\n\n` +
+      `Use <b>ADD WALLET</b> or send a private key after tapping import.`
+    );
+  }
+  let bal = "unavailable";
+  try {
+    bal = `${(await getBalance(telegramId)).toFixed(4)} SOL`;
+  } catch {
+    /* ignore */
+  }
+  return `👛 <b>WALLET</b>\n\n<code>${address}</code>\nBalance: <b>${bal}</b>`;
+}
+
 function registerHandlers() {
   bot.command("start", async (ctx) => {
     const id = requireUser(ctx);
@@ -131,12 +145,15 @@ function registerHandlers() {
 
   bot.command("help", async (ctx) => {
     requireUser(ctx);
-    await ctx.reply(helpText(), { parse_mode: "HTML", reply_markup: mainKeyboard() });
+    await ctx.reply(helpHomeText(), {
+      parse_mode: "HTML",
+      reply_markup: mainKeyboard()
+    });
   });
 
   bot.command("status", async (ctx) => {
     const id = requireUser(ctx);
-    await ctx.reply(await statusText(id), {
+    await ctx.reply(statusText(id), {
       parse_mode: "HTML",
       reply_markup: mainKeyboard()
     });
@@ -144,7 +161,7 @@ function registerHandlers() {
 
   bot.command("wallet", async (ctx) => {
     const id = requireUser(ctx);
-    await ctx.reply(await walletText(id), {
+    await ctx.reply(await walletSummary(id), {
       parse_mode: "HTML",
       reply_markup: walletKeyboard()
     });
@@ -169,7 +186,7 @@ function registerHandlers() {
 
   bot.command("positions", async (ctx) => {
     const id = requireUser(ctx);
-    await ctx.reply(await positionsText(id), {
+    await ctx.reply(positionsText(id), {
       parse_mode: "HTML",
       reply_markup: mainKeyboard()
     });
@@ -187,9 +204,7 @@ function registerHandlers() {
     const id = requireUser(ctx);
     updateSettings(id, { auto_state: "stopped", kill_switch: 1 });
     void notifyAdmin(`🆘 <b>KILL</b> from ${describeUser(ctx.from!)}`);
-    await ctx.reply("Emergency stop active. Automation disabled until you clear kill.", {
-      reply_markup: mainKeyboard()
-    });
+    await ctx.reply("Emergency stop active.", { reply_markup: mainKeyboard() });
   });
 
   bot.on("callback_query:data", async (ctx) => {
@@ -225,7 +240,7 @@ function registerHandlers() {
     }
 
     if (data === "status") {
-      await ctx.reply(await statusText(id), {
+      await ctx.reply(statusText(id), {
         parse_mode: "HTML",
         reply_markup: mainKeyboard()
       });
@@ -233,7 +248,7 @@ function registerHandlers() {
     }
 
     if (data === "wallet" || data === "wallet:menu" || data === "wallet:refresh") {
-      await ctx.reply(await walletText(id), {
+      await ctx.reply(await walletSummary(id), {
         parse_mode: "HTML",
         reply_markup: walletKeyboard()
       });
@@ -280,9 +295,7 @@ function registerHandlers() {
 
     if (data === "wallet:logout") {
       logout(id);
-      await ctx.reply("Wallet disconnected from this bot.", {
-        reply_markup: mainKeyboard()
-      });
+      await ctx.reply("Wallet disconnected.", { reply_markup: mainKeyboard() });
       return;
     }
 
@@ -304,7 +317,7 @@ function registerHandlers() {
     }
 
     if (data === "positions") {
-      await ctx.reply(await positionsText(id), {
+      await ctx.reply(positionsText(id), {
         parse_mode: "HTML",
         reply_markup: mainKeyboard()
       });
@@ -320,7 +333,7 @@ function registerHandlers() {
     }
 
     if (data === "help") {
-      await ctx.reply(helpText(), {
+      await ctx.reply(helpHomeText(), {
         parse_mode: "HTML",
         reply_markup: mainKeyboard()
       });
@@ -336,12 +349,14 @@ function registerHandlers() {
 
     if (data === "auto:start") {
       if (!hasWallet(id)) {
-        await ctx.reply("Connect a wallet first.", { reply_markup: walletKeyboard() });
+        await ctx.reply("Connect a wallet first.", {
+          reply_markup: walletKeyboard()
+        });
         return;
       }
       const s = getSettings(id);
       if (s.kill_switch) {
-        await ctx.reply("Kill switch is on. Clear it in settings / status before hunting.");
+        await ctx.reply("Kill switch is on. Clear it before hunting.");
         return;
       }
       updateSettings(id, { auto_state: "running" });
@@ -352,13 +367,11 @@ function registerHandlers() {
       return;
     }
 
-    // Fallback: show home so buttons never feel dead
-    if (data && data !== "noop") {
-      await ctx.reply(await homeText(id), {
-        parse_mode: "HTML",
-        reply_markup: mainKeyboard()
-      });
-    }
+    // Don't leave buttons dead — home fallback
+    await ctx.reply(await homeText(id), {
+      parse_mode: "HTML",
+      reply_markup: mainKeyboard()
+    });
   });
 
   bot.on("message:text", async (ctx) => {
@@ -389,7 +402,6 @@ function registerHandlers() {
   });
 }
 
-// CRITICAL: index.ts only calls bot.start() — handlers must register here
 registerHandlers();
 
 export { notifyAdmin };
