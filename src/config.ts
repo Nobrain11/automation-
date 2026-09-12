@@ -19,11 +19,6 @@ function rpcEndpoint(): string {
     : "https://api.mainnet-beta.solana.com";
 }
 
-function baseRpcEndpoint(): string | null {
-  const value = process.env.BASE_RPC_URL?.trim();
-  return value && /^https?:\/\//i.test(value) ? value : null;
-}
-
 function encryptionKey(): string {
   const raw = required("WALLET_ENCRYPTION_KEY");
   const decoded = Buffer.from(raw, "base64");
@@ -50,11 +45,8 @@ export const config = {
     process.env.TELEGRAM?.trim() ||
     required("TELEGRAM_BOT_TOKEN"),
 
-  /** Solana (live) */
+  /** Solana mainnet RPC */
   rpcUrl: rpcEndpoint(),
-
-  /** Base — optional until EVM trading is enabled */
-  baseRpcUrl: baseRpcEndpoint(),
 
   walletEncryptionKey: encryptionKey(),
 
@@ -69,15 +61,7 @@ export const config = {
     (process.env.RAILWAY_PUBLIC_DOMAIN
       ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN.trim()}`
       : "")
-  ).replace(/\/$/, ""),
-
-  /** Feature flags */
-  chains: {
-    solanaLive: true,
-    baseEnabled: Boolean(baseRpcEndpoint()),
-    ethereumEnabled: Boolean(process.env.ETH_RPC_URL?.trim()),
-    robinhoodEnabled: false
-  }
+  ).replace(/\/$/, "")
 };
 
 export function validateConfig(): void {
