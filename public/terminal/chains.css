@@ -1,0 +1,117 @@
+/* Chain switcher — compact, workstation style */
+
+#chainSwitcher {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.chain-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line, #1a222e);
+  background: var(--bg2, #0c0f14);
+  color: var(--text, #e8edf4);
+  font: 600 10px/1 var(--mono, ui-monospace, monospace);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.chain-btn:hover {
+  border-color: var(--line2, #2a3444);
+}
+
+.chain-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dim, #5c6b7c);
+}
+
+.chain-dot.on {
+  background: var(--green, #1dff9a);
+  box-shadow: 0 0 6px rgba(29, 255, 154, 0.45);
+}
+
+.chain-caret {
+  color: var(--dim, #5c6b7c);
+  font-size: 9px;
+}
+
+.chain-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 80;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #1a222e);
+  background: var(--bg1, #080a0e);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.chain-menu.hidden {
+  display: none !important;
+}
+
+.chain-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text, #e8edf4);
+  cursor: pointer;
+}
+
+.chain-item:hover {
+  background: var(--bg3, #12161e);
+}
+
+.chain-item.active {
+  background: rgba(29, 255, 154, 0.08);
+}
+
+.chain-item b {
+  display: block;
+  font: 600 12px/1.2 var(--font, system-ui, sans-serif);
+}
+
+.chain-item small {
+  display: block;
+  margin-top: 2px;
+  font: 500 10px/1.2 var(--mono, ui-monospace, monospace);
+  color: var(--dim, #5c6b7c);
+}
+
+.chain-badge {
+  flex-shrink: 0;
+  font: 700 8px/1 var(--mono, ui-monospace, monospace);
+  letter-spacing: 0.08em;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line, #1a222e);
+  color: var(--dim, #5c6b7c);
+}
+
+.chain-badge.live {
+  color: var(--green, #1dff9a);
+  border-color: rgba(29, 255, 154, 0.35);
+  background: rgba(29, 255, 154, 0.1);
+}
+
+@media (max-width: 420px) {
+  .chain-label {
+    /* keep short ticker on mobile */
+  }
+}
