@@ -32,7 +32,6 @@ import {
   startHunter,
   stopHunter
 } from "./api.js";
-import { getBaseStatus, listChains, probeBaseRpc } from "../chains/index.js";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -107,26 +106,7 @@ export function startWebServer() {
           webBaseUrl: config.webBaseUrl,
           scanner: scanner.getStats(),
           httpDiscovery: httpDiscovery.getStats(),
-          chains: {
-            default: "solana",
-            solana: {
-              status: "live",
-              rpcHost: (() => {
-                try {
-                  return new URL(config.rpcUrl).host;
-                } catch {
-                  return null;
-                }
-              })()
-            },
-            base: getBaseStatus(),
-            list: listChains().map((c) => ({
-              id: c.id,
-              label: c.label,
-              status: c.status,
-              kind: c.kind
-            }))
-          },
+          chain: "solana",
           hint: dbPath.startsWith("/data")
             ? "Volume OK — wallets stored"
             : "Attach Railway volume at /data"
@@ -152,33 +132,6 @@ export function startWebServer() {
           "Set-Cookie": `sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`
         });
         res.end();
-        return;
-      }
-
-      if (path === "/api/chains" && req.method === "GET") {
-        const base = getBaseStatus();
-        let probe: Awaited<ReturnType<typeof probeBaseRpc>> | null = null;
-        try {
-          probe = await probeBaseRpc();
-        } catch {
-          probe = null;
-        }
-        sendJson(res, 200, {
-          ok: true,
-          default: "solana",
-          chains: listChains(),
-          base: { ...base, probe },
-          solana: {
-            status: "live",
-            rpcHost: (() => {
-              try {
-                return new URL(config.rpcUrl).host;
-              } catch {
-                return null;
-              }
-            })()
-          }
-        });
         return;
       }
 
