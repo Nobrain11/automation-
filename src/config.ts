@@ -2,11 +2,7 @@ import "dotenv/config";
 import { config as loadEnv } from "dotenv";
 import { createHash } from "node:crypto";
 
-// v0 exposes managed variables outside the project directory during preview.
-// Load that file when present, while preserving normal process environment values.
 loadEnv({ path: "/vercel/share/.env.project", override: false });
-
-// Accept both deployment-era and local naming for the Telegram token.
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
@@ -21,6 +17,11 @@ function rpcEndpoint(): string {
   return value && /^https?:\/\//i.test(value)
     ? value
     : "https://api.mainnet-beta.solana.com";
+}
+
+function baseRpcEndpoint(): string | null {
+  const value = process.env.BASE_RPC_URL?.trim();
+  return value && /^https?:\/\//i.test(value) ? value : null;
 }
 
 function encryptionKey(): string {
@@ -39,20 +40,21 @@ function defaultDatabasePath(): string {
       process.env.RAILWAY_PROJECT_ID ||
       process.env.RAILWAY_SERVICE_ID
   );
-  // Prefer /data when volume exists; sqlite.ts falls back if not writable
   return onRailway ? "/data/bot.sqlite" : "./data/bot.sqlite";
 }
 
 export const config = {
-  // v0/Railway projects may expose the Telegram credential under TELEGRAM.
-  // Keep the canonical name first, while accepting the configured alias.
   botToken:
     process.env.TELEGRAM_BOT_TOKEN?.trim() ||
     process.env.BOT_TOKEN?.trim() ||
     process.env.TELEGRAM?.trim() ||
     required("TELEGRAM_BOT_TOKEN"),
 
+  /** Solana (live) */
   rpcUrl: rpcEndpoint(),
+
+  /** Base — optional until EVM trading is enabled */
+  baseRpcUrl: baseRpcEndpoint(),
 
   walletEncryptionKey: encryptionKey(),
 
@@ -67,7 +69,15 @@ export const config = {
     (process.env.RAILWAY_PUBLIC_DOMAIN
       ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN.trim()}`
       : "")
-  ).replace(/\/$/, "")
+  ).replace(/\/$/, ""),
+
+  /** Feature flags */
+  chains: {
+    solanaLive: true,
+    baseEnabled: Boolean(baseRpcEndpoint()),
+    ethereumEnabled: Boolean(process.env.ETH_RPC_URL?.trim()),
+    robinhoodEnabled: false
+  }
 };
 
 export function validateConfig(): void {
@@ -79,9 +89,6 @@ export function validateConfig(): void {
     throw new Error("WALLET_ENCRYPTION_KEY must be valid base64.");
   }
   if (key.length !== 32) {
-    throw new Error(
-      "WALLET_ENCRYPTION_KEY must be a base64-encoded 32-byte key. " +
-        `Got ${key.length} bytes. Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
-    );
+    throw new Error("WALLET_ENCRYPTION_KEY must decode to 32 bytes.");
   }
 }

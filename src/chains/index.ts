@@ -9,3 +9,5 @@ export {
   type ChainKind,
   type ChainStatus
 } from "./types.js";
+
+export { getBaseStatus, probeBaseRpc, type BaseStatus } from "./base.js";
