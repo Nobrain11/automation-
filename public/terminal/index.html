@@ -5,19 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#050608" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="description" content="PUMP AUTO — Solana automation terminal" />
+  <meta name="description" content="PUMP AUTO — Multi-chain automation terminal" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/logo.svg" />
   <title>PUMP AUTO</title>
   <link rel="stylesheet" href="/terminal.css" />
   <link rel="stylesheet" href="/terminal-extra.css" />
+  <link rel="stylesheet" href="/chains.css" />
 </head>
 <body>
   <div id="intro" class="intro hidden" aria-hidden="true">
     <div class="intro-mark" style="text-align:center;padding:48px 16px">
       <img src="/logo.svg" width="56" height="56" alt="" />
       <div class="intro-title">PUMP <span style="color:#1dff9a">AUTO</span></div>
-      <div class="intro-sub">SOLANA AUTOMATION TERMINAL</div>
+      <div class="intro-sub">AUTOMATION TERMINAL</div>
     </div>
   </div>
 
@@ -25,9 +26,9 @@
     <div class="gate-card">
       <img class="logo-img" src="/logo.svg" width="56" height="56" alt="PUMP AUTO" />
       <div class="logo">PUMP <span style="color:#1dff9a">AUTO</span></div>
-      <p class="muted" style="text-align:center">SOLANA AUTOMATION TERMINAL</p>
+      <p class="muted" style="text-align:center">AUTOMATION TERMINAL</p>
       <p class="muted" style="text-align:center;margin-top:12px">Open from Telegram → <b>WEB TERMINAL</b></p>
-      <p class="muted" style="text-align:center;margin-top:8px;font-size:11px">Session link required · Real market data only</p>
+      <p class="muted" style="text-align:center;margin-top:8px;font-size:11px">Session link required · Solana live · More chains staged</p>
     </div>
   </div>
 
@@ -46,7 +47,7 @@
       <button type="button" class="side-btn" data-tab="positions"><span class="ico">◫</span>POSITIONS</button>
       <div class="side-spacer"></div>
       <button type="button" class="side-btn" data-tab="menu" data-menu="risk"><span class="ico">⚙</span>SETTINGS</button>
-      <div class="side-foot">WORKSTATION</div>
+      <div class="side-foot">MULTI-CHAIN</div>
     </aside>
 
     <header class="topbar">
@@ -58,6 +59,7 @@
         </div>
       </div>
       <div class="top-metrics">
+        <div id="chainSwitcher"></div>
         <span id="solMetric">SOL —</span>
         <span id="balMetric">BAL —</span>
         <span id="huntMetric">● —</span>
@@ -80,6 +82,7 @@
   </div>
 
   <script src="/app.js"></script>
+  <script src="/chains.js"></script>
   <script src="/desk-scan.js"></script>
   <script src="/desk-quickbuy.js"></script>
   <script src="/product-home.js"></script>
