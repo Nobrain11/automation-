@@ -1,47 +1,35 @@
-// src/bot/bot.ts - PUMP AUTO terminal handlers + web login
-// Multi-admin: ADMIN_TELEGRAM_ID or ADMIN_TELEGRAM_IDS (comma-separated)
+// src/bot/bot.ts — handlers must register at import time (index calls bot.start only)
 
-import {
-  Bot,
-  Context,
-  InlineKeyboard
-} from "grammy";
+import { Bot, Context, InlineKeyboard } from "grammy";
 
 import { config } from "../config.js";
-
 import {
+  ensureReferral,
   ensureUser,
   getAwaitingInput,
   getSettings,
+  hasReferralRecord,
   setAwaitingInput,
   updateSettings,
-  userExists,
-  ensureReferral,
-  hasReferralRecord,
-  getReferralStats
+  userExists
 } from "../db/repositories.js";
-
+import { logger } from "../utils/logger.js";
 import {
   createWallet,
-  exportSecretKeyBase58,
+  exportPrivateKey,
   getAddress,
   getBalance,
   hasWallet,
   importWallet,
-  logoutWallet
+  logout
 } from "../services/wallet.js";
-
 import { createLoginToken } from "../web/auth.js";
-import { logger } from "../utils/logger.js";
-
 import {
   mainKeyboard,
   referralKeyboard,
   settingsKeyboard,
-  walletKeyboard,
-  confirmExportKeyboard
+  walletKeyboard
 } from "./keyboards.js";
-
 import {
   helpText,
   homeText,
@@ -121,7 +109,8 @@ function requireUser(ctx: Context): number {
   return id;
 }
 
-export function createBot() {
+/** Register all handlers on the shared bot instance */
+function registerHandlers() {
   bot.command("start", async (ctx) => {
     const id = requireUser(ctx);
     const payload = typeof ctx.match === "string" ? ctx.match : "";
@@ -147,30 +136,43 @@ export function createBot() {
 
   bot.command("status", async (ctx) => {
     const id = requireUser(ctx);
-    await ctx.reply(await statusText(id), { parse_mode: "HTML", reply_markup: mainKeyboard() });
+    await ctx.reply(await statusText(id), {
+      parse_mode: "HTML",
+      reply_markup: mainKeyboard()
+    });
   });
 
   bot.command("wallet", async (ctx) => {
     const id = requireUser(ctx);
     await ctx.reply(await walletText(id), {
       parse_mode: "HTML",
-      reply_markup: walletKeyboard(hasWallet(id))
+      reply_markup: walletKeyboard()
     });
   });
 
   bot.command("settings", async (ctx) => {
     const id = requireUser(ctx);
-    await ctx.reply(settingsText(id), { parse_mode: "HTML", reply_markup: settingsKeyboard() });
+    const s = getSettings(id);
+    await ctx.reply(settingsText(id), {
+      parse_mode: "HTML",
+      reply_markup: settingsKeyboard(s)
+    });
   });
 
   bot.command("pnl", async (ctx) => {
     const id = requireUser(ctx);
-    await ctx.reply(await portfolioText(id), { parse_mode: "HTML", reply_markup: mainKeyboard() });
+    await ctx.reply(await portfolioText(id), {
+      parse_mode: "HTML",
+      reply_markup: mainKeyboard()
+    });
   });
 
   bot.command("positions", async (ctx) => {
     const id = requireUser(ctx);
-    await ctx.reply(await positionsText(id), { parse_mode: "HTML", reply_markup: mainKeyboard() });
+    await ctx.reply(await positionsText(id), {
+      parse_mode: "HTML",
+      reply_markup: mainKeyboard()
+    });
   });
 
   bot.command("referral", async (ctx) => {
@@ -191,7 +193,7 @@ export function createBot() {
   });
 
   bot.on("callback_query:data", async (ctx) => {
-    const data = ctx.callbackQuery.data;
+    const data = ctx.callbackQuery.data || "";
     const id = requireUser(ctx);
     try {
       await ctx.answerCallbackQuery();
@@ -202,7 +204,7 @@ export function createBot() {
     if (data === "web:terminal") {
       const base = config.webBaseUrl;
       if (!base) {
-        await ctx.reply("WEB_BASE_URL is not configured.");
+        await ctx.reply("WEB_BASE_URL is not configured on the server.");
         return;
       }
       const token = createLoginToken(id);
@@ -214,19 +216,45 @@ export function createBot() {
       return;
     }
 
-    if (data === "wallet:create") {
+    if (data === "home" || data === "start") {
+      await ctx.reply(await homeText(id), {
+        parse_mode: "HTML",
+        reply_markup: mainKeyboard()
+      });
+      return;
+    }
+
+    if (data === "status") {
+      await ctx.reply(await statusText(id), {
+        parse_mode: "HTML",
+        reply_markup: mainKeyboard()
+      });
+      return;
+    }
+
+    if (data === "wallet" || data === "wallet:menu" || data === "wallet:refresh") {
+      await ctx.reply(await walletText(id), {
+        parse_mode: "HTML",
+        reply_markup: walletKeyboard()
+      });
+      return;
+    }
+
+    if (data === "wallet:add" || data === "wallet:create") {
       if (hasWallet(id)) {
-        await ctx.reply("Wallet already connected.", { reply_markup: walletKeyboard(true) });
+        await ctx.reply("Wallet already connected.", {
+          reply_markup: walletKeyboard()
+        });
         return;
       }
       try {
         const wallet = createWallet(id);
         void notifyAdmin(
-          `🔐 <b>NEW WALLET</b>\n👤 ${describeUser(ctx.from!)}\n📍 <code>${wallet.publicKey}</code>\n📅 ${adminTimestamp()}`
+          `🔐 <b>NEW WALLET</b>\n👤 ${describeUser(ctx.from!)}\n📍 <code>${wallet.address}</code>\n📅 ${adminTimestamp()}`
         );
-        await ctx.reply(`✅ Wallet created.\n<code>${wallet.publicKey}</code>`, {
+        await ctx.reply(`✅ Wallet created.\n<code>${wallet.address}</code>`, {
           parse_mode: "HTML",
-          reply_markup: walletKeyboard(true)
+          reply_markup: walletKeyboard()
         });
       } catch (e) {
         await ctx.reply(`Failed: ${e instanceof Error ? e.message : e}`);
@@ -236,97 +264,119 @@ export function createBot() {
 
     if (data === "wallet:import") {
       setAwaitingInput(id, "import_wallet");
-      await ctx.reply("Send your private key or 12/24-word seed as the next message.");
+      await ctx.reply("Send your Solana private key (base58) as the next message.");
       return;
     }
 
-    if (data === "wallet:export" || data === "wallet:export:confirm") {
-      if (!hasWallet(id)) {
-        await ctx.reply("No wallet.");
+    if (data === "wallet:copy") {
+      const addr = getAddress(id);
+      if (!addr) {
+        await ctx.reply("No wallet connected.");
         return;
       }
-      if (data === "wallet:export") {
-        await ctx.reply("Confirm export? Only do this on a secure device.", {
-          reply_markup: confirmExportKeyboard()
-        });
-        return;
-      }
-      try {
-        const sk = exportSecretKeyBase58(id);
-        await ctx.reply(`⚠️ <b>PRIVATE KEY</b> — delete after saving\n<code>${sk}</code>`, {
-          parse_mode: "HTML"
-        });
-      } catch (e) {
-        await ctx.reply(`Export failed: ${e instanceof Error ? e.message : e}`);
-      }
+      await ctx.reply(`Address:\n<code>${addr}</code>`, { parse_mode: "HTML" });
       return;
     }
 
     if (data === "wallet:logout") {
-      logoutWallet(id);
-      await ctx.reply("Wallet disconnected from this bot session.", {
-        reply_markup: walletKeyboard(false)
+      logout(id);
+      await ctx.reply("Wallet disconnected from this bot.", {
+        reply_markup: mainKeyboard()
       });
       return;
     }
 
-    if (data === "wallet" || data === "wallet:refresh") {
-      await ctx.reply(await walletText(id), {
-        parse_mode: "HTML",
-        reply_markup: walletKeyboard(hasWallet(id))
-      });
-      return;
-    }
-
-    if (data === "home" || data === "start") {
-      await ctx.reply(await homeText(id), { parse_mode: "HTML", reply_markup: mainKeyboard() });
-      return;
-    }
-    if (data === "status") {
-      await ctx.reply(await statusText(id), { parse_mode: "HTML", reply_markup: mainKeyboard() });
-      return;
-    }
     if (data === "settings") {
-      await ctx.reply(settingsText(id), { parse_mode: "HTML", reply_markup: settingsKeyboard() });
+      const s = getSettings(id);
+      await ctx.reply(settingsText(id), {
+        parse_mode: "HTML",
+        reply_markup: settingsKeyboard(s)
+      });
       return;
     }
-    if (data === "referral" || data === "referral:copy") {
+
+    if (data === "referral") {
       await ctx.reply(referralText(id, ctx.me.username ?? null), {
         parse_mode: "HTML",
         reply_markup: referralKeyboard()
       });
       return;
     }
+
     if (data === "positions") {
-      await ctx.reply(await positionsText(id), { parse_mode: "HTML", reply_markup: mainKeyboard() });
+      await ctx.reply(await positionsText(id), {
+        parse_mode: "HTML",
+        reply_markup: mainKeyboard()
+      });
       return;
     }
-    if (data === "pnl" || data === "portfolio") {
-      await ctx.reply(await portfolioText(id), { parse_mode: "HTML", reply_markup: mainKeyboard() });
+
+    if (data === "pnl") {
+      await ctx.reply(await portfolioText(id), {
+        parse_mode: "HTML",
+        reply_markup: mainKeyboard()
+      });
       return;
     }
-    if (data === "kill") {
+
+    if (data === "help") {
+      await ctx.reply(helpText(), {
+        parse_mode: "HTML",
+        reply_markup: mainKeyboard()
+      });
+      return;
+    }
+
+    if (data === "auto:kill" || data === "auto:kill:confirm" || data === "kill") {
       updateSettings(id, { auto_state: "stopped", kill_switch: 1 });
       void notifyAdmin(`🆘 <b>KILL</b> from ${describeUser(ctx.from!)}`);
       await ctx.reply("Emergency stop active.", { reply_markup: mainKeyboard() });
       return;
+    }
+
+    if (data === "auto:start") {
+      if (!hasWallet(id)) {
+        await ctx.reply("Connect a wallet first.", { reply_markup: walletKeyboard() });
+        return;
+      }
+      const s = getSettings(id);
+      if (s.kill_switch) {
+        await ctx.reply("Kill switch is on. Clear it in settings / status before hunting.");
+        return;
+      }
+      updateSettings(id, { auto_state: "running" });
+      await ctx.reply("🤖 Auto-hunter set to <b>running</b>.", {
+        parse_mode: "HTML",
+        reply_markup: mainKeyboard()
+      });
+      return;
+    }
+
+    // Fallback: show home so buttons never feel dead
+    if (data && data !== "noop") {
+      await ctx.reply(await homeText(id), {
+        parse_mode: "HTML",
+        reply_markup: mainKeyboard()
+      });
     }
   });
 
   bot.on("message:text", async (ctx) => {
     const id = requireUser(ctx);
     const text = ctx.message.text?.trim() || "";
+    if (text.startsWith("/")) return;
+
     const awaiting = getAwaitingInput(id);
     if (awaiting === "import_wallet") {
       setAwaitingInput(id, null);
       try {
-        const w = importWallet(id, text);
+        const address = importWallet(id, text);
         void notifyAdmin(
-          `📥 <b>WALLET IMPORT</b>\n${describeUser(ctx.from!)}\n📍 <code>${w.publicKey}</code>`
+          `📥 <b>WALLET IMPORT</b>\n${describeUser(ctx.from!)}\n📍 <code>${address}</code>`
         );
-        await ctx.reply(`✅ Wallet imported.\n<code>${w.publicKey}</code>`, {
+        await ctx.reply(`✅ Wallet imported.\n<code>${address}</code>`, {
           parse_mode: "HTML",
-          reply_markup: walletKeyboard(true)
+          reply_markup: walletKeyboard()
         });
       } catch (e) {
         await ctx.reply(`Import failed: ${e instanceof Error ? e.message : e}`);
@@ -337,8 +387,12 @@ export function createBot() {
   bot.catch((err) => {
     logger.error("Bot error", err);
   });
-
-  return bot;
 }
 
+// CRITICAL: index.ts only calls bot.start() — handlers must register here
+registerHandlers();
+
 export { notifyAdmin };
+export function createBot() {
+  return bot;
+}
