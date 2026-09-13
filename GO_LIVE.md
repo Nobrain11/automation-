@@ -1,6 +1,32 @@
 # PUMP AUTO — Go Live Checklist
 
-## 1. Railway Variables (required)
+## 1. Vercel Variables (required for webhook deployment)
+
+| Variable | Notes |
+|----------|-------|
+| `TELEGRAM_BOT_TOKEN` | Token from @BotFather |
+| `TELEGRAM_WEBHOOK_SECRET` | Random secret; must match Telegram's webhook header |
+| `TELEGRAM_WEBHOOK_SETUP_TOKEN` | Separate random token for the setup endpoint |
+| `WALLET_ENCRYPTION_KEY` | Base64 value decoding to 32 bytes |
+| `DATABASE_PATH` | Use a persistent external database or storage for production data |
+| `WEB_BASE_URL` | Deployed HTTPS URL, without a trailing slash |
+
+After deploying, register Telegram's webhook once:
+
+```bash
+curl -X POST "https://YOUR-VERCEL-DOMAIN/api/telegram/setup" \\
+  -H "Authorization: Bearer YOUR_TELEGRAM_WEBHOOK_SETUP_TOKEN"
+```
+
+Then verify it:
+
+```bash
+curl "https://api.telegram.org/botYOUR_BOT_TOKEN/getWebhookInfo"
+```
+
+The response should show `https://YOUR-VERCEL-DOMAIN/api/telegram/webhook` and no recent delivery errors. Do not run the long-polling `src/index.ts` process on Vercel.
+
+## 2. Railway Variables (required)
 
 | Variable | Example | Notes |
 |----------|---------|-------|
