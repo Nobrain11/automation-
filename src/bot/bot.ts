@@ -154,10 +154,10 @@ function registerHandlers() {
       return;
     }
 
-    await ctx.reply(
-      `⚡ <b>WELCOME BACK TO PUMP AUTO</b>\n\nYour wallet is connected. Open your terminal below to continue.`,
-      { parse_mode: "HTML", reply_markup: mainKeyboard() }
-    );
+    await ctx.reply(await homeText(id), {
+      parse_mode: "HTML",
+      reply_markup: mainKeyboard()
+    });
   });
 
   bot.command("help", async (ctx) => {
