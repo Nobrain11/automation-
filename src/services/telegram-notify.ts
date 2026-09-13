@@ -35,10 +35,16 @@ export async function notifyUser(
   await send(telegramId, text);
 }
 
+const SCANNER_CHANNEL_ID = "-1004363928513";
+
 export async function notifyAdmin(text: string): Promise<void> {
   const adminId = process.env.ADMIN_TELEGRAM_ID?.trim();
   if (!adminId) return;
   await send(adminId, text);
+}
+
+export async function notifyScannerChannel(text: string): Promise<void> {
+  await send(SCANNER_CHANNEL_ID, text);
 }
 
 export async function notifyTrade(input: {
