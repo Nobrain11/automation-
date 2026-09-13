@@ -79,12 +79,11 @@ function requireAuth(req: IncomingMessage, res: ServerResponse): number | null {
   return telegramId;
 }
 
-export function startWebServer() {
-  const publicDir = join(process.cwd(), "public", "terminal");
-  const rootPublic = join(process.cwd(), "public");
+const publicDir = join(process.cwd(), "public", "terminal");
+const rootPublic = join(process.cwd(), "public");
 
-  const server = createServer(async (req, res) => {
-    try {
+export async function handleWebRequest(req: IncomingMessage, res: ServerResponse) {
+  try {
       const host = req.headers.host || "localhost";
       const url = new URL(req.url || "/", `http://${host}`);
       const path = url.pathname;
@@ -295,16 +294,17 @@ export function startWebServer() {
       } catch {
         sendText(res, 404, "Not found", "text/plain");
       }
-    } catch (e) {
-      logger.error("web error", e);
-      sendJson(res, 500, { ok: false, error: "server error" });
-    }
-  });
+  } catch (e) {
+    logger.error("web error", e);
+    sendJson(res, 500, { ok: false, error: "server error" });
+  }
+}
 
+export function startWebServer() {
+  const server = createServer(handleWebRequest);
   const port = Number(process.env.PORT || 3000);
   server.listen(port, "0.0.0.0", () => {
     logger.info(`Web terminal listening on 0.0.0.0:${port}`);
   });
-
   return server;
 }
