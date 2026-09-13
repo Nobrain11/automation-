@@ -1,7 +1,10 @@
 import { createSession, verifyLoginToken } from "../../src/web/auth.js";
 
 export default function handler(request: Request): Response {
-  const url = new URL(request.url);
+  const requestUrl = request.url.startsWith("http")
+    ? request.url
+    : `https://${request.headers.get("host") || "localhost"}${request.url}`;
+  const url = new URL(requestUrl);
   const token = url.searchParams.get("token") || "";
   const telegramId = verifyLoginToken(token);
 
