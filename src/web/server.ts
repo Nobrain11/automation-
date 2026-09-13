@@ -127,7 +127,7 @@ export async function handleWebRequest(req: IncomingMessage, res: ServerResponse
         }
         const sid = createSession(verified);
         res.writeHead(302, {
-          Location: "/",
+          Location: "/terminal",
           "Set-Cookie": `sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`
         });
         res.end();
