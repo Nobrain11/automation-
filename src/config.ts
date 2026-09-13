@@ -27,15 +27,7 @@ function encryptionKey(): string {
 }
 
 function defaultDatabasePath(): string {
-  if (process.env.DATABASE_PATH?.trim()) {
-    return process.env.DATABASE_PATH.trim();
-  }
-  const onRailway = Boolean(
-    process.env.RAILWAY_ENVIRONMENT ||
-      process.env.RAILWAY_PROJECT_ID ||
-      process.env.RAILWAY_SERVICE_ID
-  );
-  return onRailway ? "/data/bot.sqlite" : "./data/bot.sqlite";
+  return process.env.DATABASE_PATH?.trim() || "./data/bot.sqlite";
 }
 
 export const config = {
