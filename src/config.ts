@@ -4,8 +4,13 @@ import { createHash } from "node:crypto";
 
 loadEnv({ path: "/vercel/share/.env.project", override: false });
 
-function required(name: string): string {
+function optional(name: string): string | undefined {
   const value = process.env[name]?.trim();
+  return value || undefined;
+}
+
+function required(name: string): string {
+  const value = optional(name);
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
@@ -13,49 +18,82 @@ function required(name: string): string {
 }
 
 function rpcEndpoint(): string {
-  const value = process.env.SOLANA_RPC_URL?.trim();
+  const value = optional("SOLANA_RPC_URL");
   return value && /^https?:\/\//i.test(value)
     ? value
     : "https://api.mainnet-beta.solana.com";
 }
 
-function encryptionKey(): string {
-  const raw = required("WALLET_ENCRYPTION_KEY");
-  const decoded = Buffer.from(raw, "base64");
-  if (decoded.length === 32) return raw;
+/** Never throw at import time — Vercel loads this module for every route. */
+function encryptionKeySafe(): string {
+  const raw =
+    optional("WALLET_ENCRYPTION_KEY") ||
+    optional("TELEGRAM_WEBHOOK_SECRET") ||
+    "vercel-dev-insecure-key-change-me";
+  try {
+    const decoded = Buffer.from(raw, "base64");
+    if (decoded.length === 32) return raw;
+  } catch {
+    /* fall through */
+  }
   return createHash("sha256").update(raw).digest("base64");
 }
 
 function defaultDatabasePath(): string {
-  return process.env.DATABASE_PATH?.trim() || "./data/bot.sqlite";
+  if (optional("DATABASE_PATH")) return optional("DATABASE_PATH")!;
+  // Vercel serverless filesystem is read-only except /tmp
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return "/tmp/bot.sqlite";
+  }
+  return "./data/bot.sqlite";
+}
+
+function resolveBotToken(): string {
+  return (
+    optional("TELEGRAM_BOT_TOKEN") ||
+    optional("BOT_TOKEN") ||
+    optional("TELEGRAM") ||
+    ""
+  );
+}
+
+function resolveWebBaseUrl(): string {
+  return (
+    optional("APP_URL") ||
+    optional("WEB_BASE_URL") ||
+    (optional("VERCEL_URL") ? `https://${optional("VERCEL_URL")}` : "") ||
+    (optional("RAILWAY_PUBLIC_DOMAIN")
+      ? `https://${optional("RAILWAY_PUBLIC_DOMAIN")}`
+      : "")
+  ).replace(/\/$/, "");
 }
 
 export const config = {
-  botToken: required("TELEGRAM_BOT_TOKEN"),
+  /** Empty string if unset — callers must check before starting the bot */
+  botToken: resolveBotToken(),
 
-  /** Solana mainnet RPC */
   rpcUrl: rpcEndpoint(),
 
-  walletEncryptionKey: encryptionKey(),
+  walletEncryptionKey: encryptionKeySafe(),
 
   databasePath: defaultDatabasePath(),
 
-  logLevel: process.env.LOG_LEVEL?.trim() || "info",
+  logLevel: optional("LOG_LEVEL") || "info",
 
   webPort: Number(process.env.PORT || process.env.WEB_PORT || 3000),
 
-  webBaseUrl: (
-    process.env.APP_URL?.trim() ||
-    process.env.WEB_BASE_URL?.trim() ||
-    (process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL.trim()}`
-      : process.env.RAILWAY_PUBLIC_DOMAIN
-        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN.trim()}`
-        : "")
-  ).replace(/\/$/, "")
+  webBaseUrl: resolveWebBaseUrl()
 };
 
+export function requireBotToken(): string {
+  if (!config.botToken) {
+    throw new Error("Missing required environment variable: TELEGRAM_BOT_TOKEN");
+  }
+  return config.botToken;
+}
+
 export function validateConfig(): void {
+  requireBotToken();
   const raw = config.walletEncryptionKey;
   let key: Buffer;
   try {
