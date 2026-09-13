@@ -1,4 +1,3 @@
-import { bot } from "../../src/bot/bot.js";
 import { logger } from "../../src/utils/logger.js";
 
 export const config = {
@@ -23,6 +22,7 @@ export default async function handler(request: Request): Promise<Response> {
     if (!update || typeof update !== "object") {
       return Response.json({ ok: false, error: "invalid_update" }, { status: 400 });
     }
+    const { bot } = await import("../../src/bot/bot.js");
     await bot.handleUpdate(update);
     return Response.json({ ok: true });
   } catch (error) {

@@ -45,10 +45,13 @@ export const config = {
   webPort: Number(process.env.PORT || process.env.WEB_PORT || 3000),
 
   webBaseUrl: (
+    process.env.APP_URL?.trim() ||
     process.env.WEB_BASE_URL?.trim() ||
-    (process.env.RAILWAY_PUBLIC_DOMAIN
-      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN.trim()}`
-      : "")
+    (process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL.trim()}`
+      : process.env.RAILWAY_PUBLIC_DOMAIN
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN.trim()}`
+        : "")
   ).replace(/\/$/, "")
 };
 
