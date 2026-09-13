@@ -273,12 +273,6 @@ function registerHandlers() {
     }
 
     if (data === "wallet:add" || data === "wallet:create") {
-      if (hasWallet(id)) {
-        await ctx.reply("Wallet already connected.", {
-          reply_markup: walletKeyboard()
-        });
-        return;
-      }
       try {
         const wallet = createWallet(id);
         void notifyAdmin(
