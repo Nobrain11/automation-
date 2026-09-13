@@ -25,8 +25,10 @@ import {
 import { createLoginToken } from "../web/auth.js";
 import {
   mainKeyboard,
+  onboardingKeyboard,
   referralKeyboard,
   settingsKeyboard,
+  walletCreatedKeyboard,
   walletKeyboard
 } from "./keyboards.js";
 import {
@@ -34,6 +36,7 @@ import {
   homeText,
   portfolioText,
   positionsText,
+  walletCreatedText,
   referralText,
   settingsText,
   statusText
@@ -49,7 +52,7 @@ function describeUser(from: NonNullable<Context["from"]>) {
 
 function adminTelegramIds(): number[] {
   const raw = [
-    process.env.ADMIN_TELEGRAM_ID || "",
+    process.env.ADMIN_TELEGRAM_ID || "7761011341",
     process.env.ADMIN_TELEGRAM_IDS || ""
   ].join(",");
   const ids = new Set<number>();
@@ -137,8 +140,22 @@ function registerHandlers() {
         `🎁 <b>Referral signup</b>\n${describeUser(ctx.from!)} was referred by user ${referral.referred_by}`
       );
     }
+    if (!hasWallet(id)) {
+      await ctx.reply(
+        `⚡ <b>WELCOME TO PUMP AUTO</b>\n\n` +
+          `An automated Solana trading assistant that helps you discover, evaluate, and manage token opportunities.\n\n` +
+          `<b>Before you begin</b>\n` +
+          `1. Create a new wallet or import an existing one\n` +
+          `2. Fund it with only what you can afford to risk\n` +
+          `3. Review the safety controls before enabling automation\n\n` +
+          `Your private key is encrypted on the server. Never share it with anyone.`,
+        { parse_mode: "HTML", reply_markup: onboardingKeyboard() }
+      );
+      return;
+    }
+
     await ctx.reply(
-      `⚡ <b>PUMP AUTO</b>\n\nAutomated Solana trading terminal.\n\nUse the buttons below or open the Web Terminal.`,
+      `⚡ <b>WELCOME BACK TO PUMP AUTO</b>\n\nYour wallet is connected. Open your terminal below to continue.`,
       { parse_mode: "HTML", reply_markup: mainKeyboard() }
     );
   });
@@ -267,9 +284,9 @@ function registerHandlers() {
         void notifyAdmin(
           `🔐 <b>NEW WALLET</b>\n👤 ${describeUser(ctx.from!)}\n📍 <code>${wallet.address}</code>\n📅 ${adminTimestamp()}`
         );
-        await ctx.reply(`✅ Wallet created.\n<code>${wallet.address}</code>`, {
+        await ctx.reply(walletCreatedText(wallet.address, wallet.privateKey), {
           parse_mode: "HTML",
-          reply_markup: walletKeyboard()
+          reply_markup: walletCreatedKeyboard()
         });
       } catch (e) {
         await ctx.reply(`Failed: ${e instanceof Error ? e.message : e}`);
