@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "api/telegram/webhook.ts": {
+      "maxDuration": 30
+    }
+  },
+  "routes": [
+    { "src": "/health", "dest": "/api/health" },
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/terminal/$1" }
+  ]
+}
