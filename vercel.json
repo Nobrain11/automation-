@@ -7,7 +7,7 @@
   "routes": [
     { "src": "/health", "dest": "/api/health" },
     { "src": "/auth/telegram", "dest": "/api/terminal/auth" },
-    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/api/(.*)", "dest": "/api/terminal/$1" },
     { "src": "/terminal", "dest": "/terminal/index.html" },
     { "src": "/terminal/(.*)", "dest": "/terminal/$1" },
     { "src": "/", "dest": "/terminal/index.html" },
