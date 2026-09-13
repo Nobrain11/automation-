@@ -1,7 +1,6 @@
 // src/scanner/scanner-instance.ts
 
 import { PumpScanner } from "./scanner.js";
-import { notifyScannerToken } from "./notifier.js";
 import { TokenCandidate } from "./types.js";
 
 export type DecisionHandler = (
@@ -19,7 +18,6 @@ export function setDecisionHandler(
 
 export const scanner = new PumpScanner({
   onToken: async (telegramId, token) => {
-    await notifyScannerToken(token);
     if (decisionHandler) {
       await decisionHandler(telegramId, token);
     }

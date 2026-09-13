@@ -9,6 +9,7 @@ import { TokenCandidate } from "./types.js";
 
 const spotted = new Map<string, { marketCap: number; spottedAt: number; symbol: string }>();
 const spottedSent = new Set<string>();
+const spottedInFlight = new Set<string>();
 const milestoneSent = new Set<string>();
 let trackerStarted = false;
 
@@ -65,7 +66,17 @@ async function checkMilestones(): Promise<void> {
 }
 
 export async function notifyScannerToken(token: TokenCandidate): Promise<void> {
-  if (!token.passed || spottedSent.has(token.mint)) return;
+  if (
+    !token.passed ||
+    spottedSent.has(token.mint) ||
+    spottedInFlight.has(token.mint)
+  ) {
+    return;
+  }
+
+  // Claim before awaiting network work so repeated scanner callbacks cannot
+  // send duplicate alerts concurrently.
+  spottedInFlight.add(token.mint);
   try {
     const result = await fetchPumpMovers();
     const market = result.tokens.find((item) => item.mint === token.mint);
@@ -89,7 +100,6 @@ export async function notifyScannerToken(token: TokenCandidate): Promise<void> {
     spottedSent.add(token.mint);
 
     if (marketCap != null && marketCap > 0) {
-
       spotted.set(token.mint, {
         marketCap,
         spottedAt: Date.now(),
@@ -98,7 +108,11 @@ export async function notifyScannerToken(token: TokenCandidate): Promise<void> {
       startMilestoneTracker();
     }
   } catch (error) {
+    // Release only failed sends; successful sends stay deduped for this process.
+    spottedSent.delete(token.mint);
     logger.warn("Scanner channel notification failed", error);
+  } finally {
+    spottedInFlight.delete(token.mint);
   }
 }
 
