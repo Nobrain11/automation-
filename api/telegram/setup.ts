@@ -1,45 +1,44 @@
-import { bot } from "../../src/bot/bot.js";
 import { logger } from "../../src/utils/logger.js";
 
 export const config = {
   maxDuration: 30
 };
 
-function configuredBaseUrl(): string {
-  const explicit = process.env.WEB_BASE_URL?.trim().replace(/\/$/, "");
-  if (explicit) return explicit;
-
-  const vercelUrl = process.env.VERCEL_URL?.trim();
-  if (vercelUrl) return `https://${vercelUrl}`;
-
-  throw new Error("WEB_BASE_URL or VERCEL_URL is required");
+function requiredEnv(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  return value;
 }
 
 export default async function handler(request: Request): Promise<Response> {
-  if (request.method !== "POST") {
+  if (request.method !== "GET") {
     return Response.json({ ok: false, error: "method_not_allowed" }, { status: 405 });
   }
 
-  const setupToken = process.env.TELEGRAM_WEBHOOK_SETUP_TOKEN?.trim();
-  const receivedToken = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
-  if (!setupToken || receivedToken !== setupToken) {
-    return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
-  }
-
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
-  if (!secret) {
-    return Response.json({ ok: false, error: "webhook_secret_not_configured" }, { status: 503 });
-  }
-
   try {
-    const url = `${configuredBaseUrl()}/api/telegram/webhook`;
-    const result = await bot.api.setWebhook(url, {
-      secret_token: secret,
+    const token = requiredEnv("TELEGRAM_BOT_TOKEN");
+    const appUrl = requiredEnv("APP_URL").replace(/\/$/, "");
+    const webhookUrl = `${appUrl}/api/telegram/webhook`;
+    const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+    const body: Record<string, unknown> = {
+      url: webhookUrl,
       allowed_updates: ["message", "callback_query"]
+    };
+    if (secret) body.secret_token = secret;
+
+    const telegramResponse = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
     });
-    return Response.json({ ok: result, webhookUrl: url });
+    const telegramResult = await telegramResponse.json();
+
+    return Response.json(
+      { ok: telegramResponse.ok && telegramResult.ok === true, webhookUrl, telegram: telegramResult },
+      { status: telegramResponse.ok && telegramResult.ok === true ? 200 : 502 }
+    );
   } catch (error) {
     logger.error("Telegram webhook setup failed", error);
-    return Response.json({ ok: false, error: "setup_failed" }, { status: 502 });
+    return Response.json({ ok: false, error: error instanceof Error ? error.message : "setup_failed" }, { status: 500 });
   }
 }

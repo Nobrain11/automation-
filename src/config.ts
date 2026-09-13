@@ -31,11 +31,7 @@ function defaultDatabasePath(): string {
 }
 
 export const config = {
-  botToken:
-    process.env.TELEGRAM_BOT_TOKEN?.trim() ||
-    process.env.BOT_TOKEN?.trim() ||
-    process.env.TELEGRAM?.trim() ||
-    required("TELEGRAM_BOT_TOKEN"),
+  botToken: required("TELEGRAM_BOT_TOKEN"),
 
   /** Solana mainnet RPC */
   rpcUrl: rpcEndpoint(),
