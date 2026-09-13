@@ -1,23 +1,43 @@
-export default async function handler(request: Request): Promise<Response> {
+import type { IncomingMessage, ServerResponse } from "node:http";
+
+function sendText(
+  response: ServerResponse,
+  statusCode: number,
+  body: string,
+  headers: Record<string, string> = {}
+): void {
+  response.writeHead(statusCode, {
+    "Content-Type": "text/plain; charset=utf-8",
+    ...headers
+  });
+  response.end(body);
+}
+
+export default async function handler(
+  request: IncomingMessage,
+  response: ServerResponse
+): Promise<void> {
   try {
-    const requestUrl = request.url.startsWith("http")
-      ? request.url
-      : `https://${request.headers.get("host") || "localhost"}${request.url}`;
-    const url = new URL(requestUrl);
+    const host = request.headers.host || "localhost";
+    const url = new URL(request.url || "/", `https://${host}`);
     const token = url.searchParams.get("token");
 
     if (!token) {
-      return new Response(
-        "Missing login token. Open WEB TERMINAL again from the Telegram bot.",
-        { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+      sendText(
+        response,
+        400,
+        "Missing login token. Open WEB TERMINAL again from the Telegram bot."
       );
+      return;
     }
 
     if (!process.env.WALLET_ENCRYPTION_KEY?.trim()) {
-      return new Response(
-        "Server misconfigured: WALLET_ENCRYPTION_KEY is missing in Vercel env.",
-        { status: 500, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+      sendText(
+        response,
+        500,
+        "Server misconfigured: WALLET_ENCRYPTION_KEY is missing in Vercel env."
       );
+      return;
     }
 
     const { createSession, verifyLoginToken } = await import(
@@ -28,33 +48,32 @@ export default async function handler(request: Request): Promise<Response> {
     try {
       telegramId = verifyLoginToken(token);
     } catch {
-      return new Response(
-        "Invalid login link. Open WEB TERMINAL again from the Telegram bot.",
-        { status: 401, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+      sendText(
+        response,
+        401,
+        "Invalid login link. Open WEB TERMINAL again from the Telegram bot."
       );
+      return;
     }
 
     if (!telegramId) {
-      return new Response(
-        "Invalid or expired link. Open WEB TERMINAL again from the Telegram bot.",
-        { status: 401, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+      sendText(
+        response,
+        401,
+        "Invalid or expired link. Open WEB TERMINAL again from the Telegram bot."
       );
+      return;
     }
 
     const session = createSession(telegramId);
-    return new Response(null, {
-      status: 302,
-      headers: {
-        Location: "/",
-        "Set-Cookie": `sid=${encodeURIComponent(session)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`
-      }
+    response.writeHead(302, {
+      Location: "/",
+      "Set-Cookie": `sid=${encodeURIComponent(session)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`
     });
+    response.end();
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Authentication failed";
-    return new Response(`Terminal auth error: ${message}`, {
-      status: 500,
-      headers: { "Content-Type": "text/plain; charset=utf-8" }
-    });
+    sendText(response, 500, `Terminal auth error: ${message}`);
   }
 }
