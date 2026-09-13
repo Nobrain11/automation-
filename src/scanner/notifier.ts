@@ -96,7 +96,7 @@ export async function notifyScannerToken(token: TokenCandidate): Promise<void> {
       `TP1 +50% → sell 40%   TP2 +120% → sell 30%   TP3 +250% → sell 20%`,
       `Stop Loss −20%   Trail after +40% / 15%`,
       `[ Buy on PUMP AUTO ]`
-    ].join("\\n"));
+    ].join("\n"));
     spottedSent.add(token.mint);
 
     if (marketCap != null && marketCap > 0) {
