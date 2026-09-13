@@ -1,11 +1,11 @@
 // src/web/auth.ts — signed web sessions (no private keys)
 
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { config } from "../config.js";
-import { db } from "../db/sqlite.js";
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const LOGIN_TTL_MS = 10 * 60 * 1000;
+const SESSION_PREFIX = "web";
 
 function signingKey(): Buffer {
   return Buffer.from(config.walletEncryptionKey, "base64");
@@ -45,35 +45,44 @@ export function verifyLoginToken(token: string): number | null {
   return telegramId;
 }
 
+function signSession(payload: string): string {
+  return createHmac("sha256", signingKey())
+    .update(payload)
+    .digest("base64url");
+}
+
 export function createSession(telegramId: number): string {
-  const token = randomBytes(32).toString("base64url");
-  const now = Date.now();
-  const expires = now + SESSION_TTL_MS;
-
-  db.prepare(`
-    INSERT INTO web_sessions (token, telegram_id, created_at, expires_at)
-    VALUES (?, ?, ?, ?)
-  `).run(token, telegramId, now, expires);
-
-  return token;
+  const expires = Date.now() + SESSION_TTL_MS;
+  const payload = `${SESSION_PREFIX}.${telegramId}.${expires}`;
+  return `${payload}.${signSession(payload)}`;
 }
 
 export function resolveSession(token: string | undefined | null): number | null {
   if (!token) return null;
-  const row = db.prepare(`
-    SELECT telegram_id, expires_at FROM web_sessions WHERE token = ?
-  `).get(token) as { telegram_id: number; expires_at: number } | undefined;
+  const parts = token.split(".");
+  if (parts.length !== 4 || parts[0] !== SESSION_PREFIX) return null;
 
-  if (!row) return null;
-  if (Date.now() > row.expires_at) {
-    db.prepare(`DELETE FROM web_sessions WHERE token = ?`).run(token);
+  const telegramId = Number(parts[1]);
+  const expires = Number(parts[2]);
+  const signature = parts[3];
+  if (!Number.isSafeInteger(telegramId) || !Number.isFinite(expires)) return null;
+  if (Date.now() > expires) return null;
+
+  const expected = signSession(`${parts[0]}.${parts[1]}.${parts[2]}`);
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (
+    actualBuffer.length !== expectedBuffer.length ||
+    !timingSafeEqual(actualBuffer, expectedBuffer)
+  ) {
     return null;
   }
-  return row.telegram_id;
+
+  return telegramId;
 }
 
-export function destroySession(token: string): void {
-  db.prepare(`DELETE FROM web_sessions WHERE token = ?`).run(token);
+export function destroySession(_token: string): void {
+  // Sessions are stateless signed cookies; expiry invalidates them.
 }
 
 export function parseCookies(header: string | undefined): Record<string, string> {
