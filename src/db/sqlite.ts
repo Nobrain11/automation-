@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
@@ -55,7 +56,7 @@ function openDatabase(): { db: SqliteDb; path: string } {
   ) => SqliteDb;
   try {
     // Native module — can fail on some serverless platforms
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const require = createRequire(import.meta.url);
     DatabaseCtor = require("better-sqlite3");
   } catch (error) {
     logger.error("better-sqlite3 load failed", error);
