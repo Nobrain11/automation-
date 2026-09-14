@@ -126,7 +126,7 @@ export async function handleWebRequest(req: IncomingMessage, res: ServerResponse
       let scannerStats: Record<string, unknown> = {};
       let httpStats: Record<string, unknown> = {};
       try {
-        scannerStats = scanner.getStats() as Record<string, unknown>;
+        scannerStats = scanner.getStats() as unknown as Record<string, unknown>;
       } catch {
         scannerStats = { error: "unavailable" };
       }
@@ -222,7 +222,7 @@ export async function handleWebRequest(req: IncomingMessage, res: ServerResponse
     if (path === "/api/trending" && req.method === "GET") {
       const cookies = parseCookies(req.headers.cookie);
       const id = resolveSession(cookies.sid);
-      sendJson(res, 200, await buildTrending(id ?? 0));
+      sendJson(res, 200, await buildTrending());
       return;
     }
 
@@ -235,7 +235,9 @@ export async function handleWebRequest(req: IncomingMessage, res: ServerResponse
 
     if (path === "/api/token" && req.method === "GET") {
       const mint = url.searchParams.get("mint") || "";
-      sendJson(res, 200, await getTokenTerminal(mint));
+      const cookies = parseCookies(req.headers.cookie);
+      const id = resolveSession(cookies.sid) ?? 0;
+      sendJson(res, 200, await getTokenTerminal(id, mint));
       return;
     }
 

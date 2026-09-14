@@ -156,7 +156,7 @@ export function walletCreatedKeyboard() {
     .row()
     .text("🔐 BACKUP WALLET", "wallet:export")
     .row()
-    .text("✓ I'VE SAVED IT", "home");
+    .text("✓ I'VE SAVED IT", "wallet:saved");
 }
 
 export function scannerKeyboard() {

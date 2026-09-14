@@ -172,9 +172,10 @@ export async function notifyRejectedToken(
   token: TokenCandidate
 ): Promise<void> {
   const ticker = tickerOf(token);
+  const rejectionReasons = token.rejectionReasons ?? [];
   const reasons =
-    token.rejectionReasons.length > 0
-      ? token.rejectionReasons.map((r) => `• ${r}`).join("\n")
+    rejectionReasons.length > 0
+      ? rejectionReasons.map((r) => `• ${r}`).join("\n")
       : "• (no reason recorded)";
 
   await bot.api.sendMessage(
