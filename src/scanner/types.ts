@@ -1,3 +1,15 @@
+export interface ScannerStats {
+  running: boolean;
+  discovered: number;
+  evaluated: number;
+  passed: number;
+  rejected: number;
+  lastEventAt: number | null;
+  lastCandidateAt: number | null;
+  websocketReconnects: number;
+  dropReasons: Record<string, number>;
+}
+
 export interface TokenCandidate {
   mint: string;
   name?: string | null;
