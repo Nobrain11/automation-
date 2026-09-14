@@ -1,8 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { validateConfig } from "../../src/config.js";
-import { runMigrations } from "../../src/db/migrations.js";
-import { bot } from "../../src/bot/bot.js";
 
 export const config = {
   maxDuration: 30
@@ -72,6 +69,11 @@ export default async function handler(
     }
 
     try {
+      const [{ validateConfig }, { runMigrations }, { bot }] = await Promise.all([
+        import("../../src/config.js"),
+        import("../../src/db/migrations.js"),
+        import("../../src/bot/bot.js")
+      ]);
       validateConfig();
       runMigrations();
       await bot.handleUpdate(update as object);
