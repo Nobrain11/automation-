@@ -307,7 +307,11 @@ export async function handleWebRequest(req: IncomingMessage, res: ServerResponse
     }
 
     const asset = await tryStatic(
-      path.startsWith("/terminal") ? path.replace(/^\/terminal/, "") || "/" : path
+      path === "/portfolio"
+        ? "/portfolio.html"
+        : path.startsWith("/terminal")
+          ? path.replace(/^\/terminal/, "") || "/"
+          : path
     );
     if (asset) {
       res.writeHead(200, { "Content-Type": asset.type, "Cache-Control": "no-cache" });

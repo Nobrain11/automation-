@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PUMP AUTO — Portfolio</title>
+  <link rel="stylesheet" href="/terminal/portfolio.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">PORTFOLIO</div>
+      <h1>Positions &amp; PnL</h1>
+    </div>
+    <button id="refresh" class="refresh" type="button">Refresh</button>
+  </header>
+  <main class="content">
+    <div id="error" class="alert hidden" role="status"></div>
+    <section class="stats" aria-label="Portfolio summary">
+      <article class="stat"><span>Balance</span><strong id="balance">0.0000 SOL</strong></article>
+      <article class="stat"><span>Total PnL</span><strong id="total-pnl" class="positive">+0.0000 SOL</strong></article>
+      <article class="stat"><span>Realized</span><strong id="realized">0.0000</strong></article>
+      <article class="stat"><span>Unrealized</span><strong id="unrealized">0.0000</strong></article>
+    </section>
+    <section class="positions-section">
+      <div class="section-heading">OPEN POSITIONS <span id="position-count">(0)</span></div>
+      <div id="positions" class="empty">No open positions. Positions open after confirmed buys.</div>
+    </section>
+  </main>
+  <nav class="bottom-nav" aria-label="Primary navigation">
+    <a href="/terminal"><span>H</span>Home</a>
+    <a href="/terminal#hunt"><span>◎</span>Hunt</a>
+    <a href="/terminal#trade"><span>⌘</span>Term</a>
+    <a class="active" href="/portfolio"><span>◈</span>Port</a>
+    <a href="/terminal#menu"><span>···</span>More</a>
+  </nav>
+  <script src="/terminal/portfolio.js"></script>
+</body>
+</html>
