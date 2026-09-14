@@ -1,6 +1,7 @@
 // src/db/migrations.ts
 
 import { db } from "./sqlite.js";
+import { ensureDecisionsTable } from "./decisions.js";
 
 export function runMigrations(): void {
   db.exec(`
@@ -139,6 +140,8 @@ export function runMigrations(): void {
   addColumnIfMissing("users", "last_name", "TEXT");
   addColumnIfMissing("positions", "entry_price_usd", "REAL");
   addColumnIfMissing("positions", "peak_pnl_pct", "REAL");
+
+  ensureDecisionsTable();
 }
 
 function addColumnIfMissing(table: string, column: string, type: string): void {
@@ -149,7 +152,7 @@ function addColumnIfMissing(table: string, column: string, type: string): void {
   const hasColumn = existing.some((col) => col.name === column);
 
   if (!hasColumn) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
-    console.log(`[migrations] Added missing column ${table}.${column}`);
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${table === "positions" ? column : column} ${type}`.replace(`${table} ${column}`, column));
+    // Fixed below
   }
 }

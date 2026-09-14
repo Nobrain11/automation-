@@ -15,8 +15,14 @@ export interface FilterResult {
   milestones: FilterMilestone[];
 }
 
-/** Max age for soft freshness pass (HTTP discovery rarely sees <90s) */
+/** Max age for soft freshness pass */
 const MAX_AGE_SECONDS = 30 * 60;
+/** User request: avoid dead microcaps — soft floor on 1m volume USD */
+const MIN_VOLUME_1M_USD = 1000;
+/** Min curve liquidity in SOL */
+const MIN_CURVE_LIQ_SOL = 0.5;
+/** Soft market-cap floor when provided (USD) — skip junk under ~5k */
+const MIN_MCAP_USD = 5_000;
 
 export function buildFilterMilestones(
   token: Partial<TokenCandidate> & {
@@ -27,6 +33,7 @@ export function buildFilterMilestones(
     curveLiquiditySol?: number | null;
     top10Percent?: number | null;
     volume1mUsd?: number | null;
+    marketCapUsd?: number | null;
     creatorDumping?: boolean;
     smartMoneyOverride?: boolean;
   }
@@ -137,19 +144,19 @@ export function buildFilterMilestones(
   }
 
   if (token.curveLiquiditySol != null && Number.isFinite(token.curveLiquiditySol)) {
-    if (token.curveLiquiditySol >= 0.5) {
+    if (token.curveLiquiditySol >= MIN_CURVE_LIQ_SOL) {
       milestones.push({
         id: "liquidity",
         label: "Curve liquidity",
         status: "pass",
-        detail: `${token.curveLiquiditySol.toFixed(3)} SOL · min 0.5`
+        detail: `${token.curveLiquiditySol.toFixed(3)} SOL · min ${MIN_CURVE_LIQ_SOL}`
       });
     } else {
       milestones.push({
         id: "liquidity",
         label: "Curve liquidity",
         status: "fail",
-        detail: `${token.curveLiquiditySol.toFixed(3)} SOL · below 0.5`
+        detail: `${token.curveLiquiditySol.toFixed(3)} SOL · below ${MIN_CURVE_LIQ_SOL}`
       });
     }
   } else {
@@ -182,25 +189,24 @@ export function buildFilterMilestones(
       id: "holders",
       label: "Top 10 holders",
       status: "skip",
-      detail: "No holder data"
+      detail: "No holder distribution"
     });
   }
 
-  // Volume: missing = skip (do not fail the whole candidate)
   if (token.volume1mUsd != null && Number.isFinite(token.volume1mUsd)) {
-    if (token.volume1mUsd >= 1000) {
+    if (token.volume1mUsd >= MIN_VOLUME_1M_USD) {
       milestones.push({
         id: "volume",
         label: "1m volume",
         status: "pass",
-        detail: `$${Math.round(token.volume1mUsd).toLocaleString()} · min $1k`
+        detail: `$${token.volume1mUsd.toFixed(0)} · min $${MIN_VOLUME_1M_USD}`
       });
     } else {
       milestones.push({
         id: "volume",
         label: "1m volume",
         status: "fail",
-        detail: `$${Math.round(token.volume1mUsd).toLocaleString()} · below $1k`
+        detail: `$${token.volume1mUsd.toFixed(0)} · below $${MIN_VOLUME_1M_USD}`
       });
     }
   } else {
@@ -208,7 +214,32 @@ export function buildFilterMilestones(
       id: "volume",
       label: "1m volume",
       status: "skip",
-      detail: "Volume not measured yet"
+      detail: "No volume reading"
+    });
+  }
+
+  if (token.marketCapUsd != null && Number.isFinite(token.marketCapUsd)) {
+    if (token.marketCapUsd >= MIN_MCAP_USD) {
+      milestones.push({
+        id: "mcap",
+        label: "Market cap",
+        status: "pass",
+        detail: `$${token.marketCapUsd.toFixed(0)} · min $${MIN_MCAP_USD}`
+      });
+    } else {
+      milestones.push({
+        id: "mcap",
+        label: "Market cap",
+        status: "fail",
+        detail: `$${token.marketCapUsd.toFixed(0)} · below $${MIN_MCAP_USD}`
+      });
+    }
+  } else {
+    milestones.push({
+      id: "mcap",
+      label: "Market cap",
+      status: "skip",
+      detail: "No mcap reading"
     });
   }
 
@@ -217,21 +248,22 @@ export function buildFilterMilestones(
       id: "creator",
       label: "Creator behavior",
       status: "fail",
-      detail: "Creator dumping detected"
+      detail: "Creator dumping detected",
+      hard: true
     });
   } else if (token.creatorDumping === false) {
     milestones.push({
       id: "creator",
       label: "Creator behavior",
       status: "pass",
-      detail: "No dump signal"
+      detail: "No dump flag"
     });
   } else {
     milestones.push({
       id: "creator",
       label: "Creator behavior",
       status: "skip",
-      detail: "Not checked"
+      detail: "No data"
     });
   }
 
@@ -240,7 +272,7 @@ export function buildFilterMilestones(
       id: "smart_money",
       label: "Smart money",
       status: "pass",
-      detail: "Override active · soft fails bypassed"
+      detail: "Override active"
     });
   } else {
     milestones.push({
@@ -269,9 +301,10 @@ export function evaluateToken(
     else if (m.id === "mint_authority") reasons.push("mint authority active");
     else if (m.id === "freeze_authority") reasons.push("freeze authority active");
     else if (m.id === "age") reasons.push(`older than ${MAX_AGE_SECONDS} seconds`);
-    else if (m.id === "liquidity") reasons.push("curve liquidity below 0.5 SOL");
+    else if (m.id === "liquidity") reasons.push(`curve liquidity below ${MIN_CURVE_LIQ_SOL} SOL`);
     else if (m.id === "holders") reasons.push("top 10 holders above 35%");
-    else if (m.id === "volume") reasons.push("1m volume below $1k");
+    else if (m.id === "volume") reasons.push(`1m volume below $${MIN_VOLUME_1M_USD}`);
+    else if (m.id === "mcap") reasons.push(`market cap below $${MIN_MCAP_USD}`);
     else if (m.id === "creator") reasons.push("creator dumping");
   }
 
