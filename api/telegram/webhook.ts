@@ -5,6 +5,13 @@ export const config = {
   maxDuration: 30
 };
 
+let botInitPromise: Promise<void> | undefined;
+
+async function initializeBot(bot: { init: () => Promise<void> }): Promise<void> {
+  botInitPromise ??= bot.init();
+  await botInitPromise;
+}
+
 async function readJson(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
@@ -76,6 +83,7 @@ export default async function handler(
       ]);
       validateConfig();
       runMigrations();
+      await initializeBot(bot);
       await bot.handleUpdate(update as object);
       sendJson(res, 200, { ok: true });
     } catch (error) {
