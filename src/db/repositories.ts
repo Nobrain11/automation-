@@ -133,8 +133,8 @@ export function saveWallet(
   const existingCount = (
     db
       .prepare(`SELECT COUNT(*) AS count FROM wallets WHERE telegram_id = ?`)
-      .get(telegramId) as { count: number }
-  ).count;
+      .get(telegramId) as { count?: number } | undefined
+  )?.count ?? 0;
 
   db.prepare(`UPDATE wallets SET is_active = 0 WHERE telegram_id = ?`).run(
     telegramId
@@ -273,8 +273,8 @@ export function getReferralStats(telegramId: number): {
   const referredCount = (
     db
       .prepare(`SELECT COUNT(*) AS count FROM referrals WHERE referred_by = ?`)
-      .get(telegramId) as { count: number }
-  ).count;
+      .get(telegramId) as { count?: number } | undefined
+  )?.count ?? 0;
   const totalEarnedSol = (
     db
       .prepare(
