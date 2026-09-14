@@ -160,6 +160,33 @@ function renderHome(d) {
         <button type="button" class="action ghost" data-menu="pnl">Portfolio</button>
         <button type="button" class="action ghost" data-menu="referral">Referral</button>
       </div>
+
+      <section class="home-feature-group" aria-labelledby="home-intelligence-title">
+        <h2 id="home-intelligence-title">Intelligence</h2>
+        <div class="home-feature-list">
+          <button type="button" class="home-feature" data-go="trending"><span><b>Smart Devs</b><small>Developer intelligence</small></span><strong>›</strong></button>
+          <button type="button" class="home-feature" data-menu="wallet"><span><b>Smart Money</b><small>Tracked wallets</small></span><strong>›</strong></button>
+          <button type="button" class="home-feature" data-menu="pnl"><span><b>Leaderboard</b><small>Ranked traders</small></span><strong>›</strong></button>
+          <button type="button" class="home-feature" data-menu="copy"><span><b>Copy Trade</b><small>Mirror wallets</small></span><strong>›</strong></button>
+        </div>
+      </section>
+
+      <section class="home-feature-group" aria-labelledby="home-account-title">
+        <h2 id="home-account-title">Account</h2>
+        <div class="home-feature-list">
+          <button type="button" class="home-feature" data-menu="wallet"><span><b>Wallets</b><small>Balances &amp; keys</small></span><strong>›</strong></button>
+          <button type="button" class="home-feature" data-menu="activity"><span><b>Activity</b><small>Event timeline</small></span><strong>›</strong></button>
+          <button type="button" class="home-feature" data-menu="risk"><span><b>Settings</b><small>Risk &amp; preferences</small></span><strong>›</strong></button>
+          <button type="button" class="home-feature" data-menu="security"><span><b>Security</b><small>Encryption &amp; sessions</small></span><strong>›</strong></button>
+        </div>
+      </section>
+
+      <section class="home-feature-group" aria-labelledby="home-system-title">
+        <h2 id="home-system-title">System</h2>
+        <div class="home-feature-list">
+          ${killBtn}
+        </div>
+      </section>
     </div>`;
 }
 
@@ -195,6 +222,13 @@ function renderMenu(d) {
           .join("")
       : `<div class="empty">No activity</div>`;
     return `<div class="panel"><h1>Activity</h1>${lines}<button type="button" class="action ghost" data-go="home">← Back</button></div>`;
+  }
+  if (state.menuView === "copy" || state.menuView === "security") {
+    const title = state.menuView === "copy" ? "Copy Trade" : "Security";
+    const detail = state.menuView === "copy"
+      ? "Mirror-wallet automation is coming soon. Your wallet remains unchanged."
+      : "Wallet keys are encrypted and private actions require a connected Telegram session.";
+    return `<div class="panel"><h1>${title}</h1><div class="ws-meta">${detail}</div><button type="button" class="action ghost" data-go="home">← Back</button></div>`;
   }
   if (state.menuView === "risk" || state.menuView === "settings") {
     const s = d.settings || {};
