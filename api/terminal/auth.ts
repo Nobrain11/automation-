@@ -58,10 +58,14 @@ function sendText(
   response.end(body);
 }
 
-export default async function handler(
+export const config = {
+  maxDuration: 10
+};
+
+export default function handler(
   request: IncomingMessage,
   response: ServerResponse
-): Promise<void> {
+): void {
   try {
     const token = requestUrl(request).searchParams.get("token");
 
