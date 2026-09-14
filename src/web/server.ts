@@ -101,7 +101,6 @@ async function tryStatic(pathname: string): Promise<{ data: Buffer; type: string
       /* try next root */
     }
   }
-  // SPA fallback
   for (const root of staticRoots()) {
     try {
       const data = await readFile(join(root, "index.html"));
@@ -123,7 +122,7 @@ export async function handleWebRequest(req: IncomingMessage, res: ServerResponse
       const dbPath = getResolvedDatabasePath();
       const persistent =
         dbPath.startsWith("/data") ||
-        dbPath.includes("bot.sqlite") && !dbPath.includes("/tmp");
+        (dbPath.includes("bot.sqlite") && !dbPath.includes("/tmp"));
       let scannerStats: Record<string, unknown> = {};
       let httpStats: Record<string, unknown> = {};
       try {
@@ -221,10 +220,16 @@ export async function handleWebRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (path === "/api/trending" && req.method === "GET") {
-      // Public-ish trending for terminal; still prefer auth when available
       const cookies = parseCookies(req.headers.cookie);
       const id = resolveSession(cookies.sid);
       sendJson(res, 200, await buildTrending(id ?? 0));
+      return;
+    }
+
+    if (path === "/api/decisions" && req.method === "GET") {
+      const { buildDecisions } = await import("./api-decisions.js");
+      const limit = Number(url.searchParams.get("limit") || 40);
+      sendJson(res, 200, buildDecisions(limit));
       return;
     }
 
@@ -303,8 +308,9 @@ export async function handleWebRequest(req: IncomingMessage, res: ServerResponse
       return;
     }
 
-    // Static / SPA
-    const asset = await tryStatic(path.startsWith("/terminal") ? path.replace(/^\/terminal/, "") || "/" : path);
+    const asset = await tryStatic(
+      path.startsWith("/terminal") ? path.replace(/^\/terminal/, "") || "/" : path
+    );
     if (asset) {
       res.writeHead(200, { "Content-Type": asset.type, "Cache-Control": "no-cache" });
       res.end(asset.data);
