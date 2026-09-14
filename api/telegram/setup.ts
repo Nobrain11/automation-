@@ -54,12 +54,31 @@ export default async function handler(
     ).replace(/\/$/, "");
 
     if (!appUrl) {
-      sendJson(res, 500, { ok: false, error: "Missing APP_URL" });
+      sendJson(res, 500, { ok: false, error: "Missing APP_URL or VERCEL_URL" });
+      return;
+    }
+
+    let parsedAppUrl: URL;
+    try {
+      parsedAppUrl = new URL(appUrl);
+    } catch {
+      sendJson(res, 500, { ok: false, error: "APP_URL must be a valid URL" });
+      return;
+    }
+    if (parsedAppUrl.protocol !== "https:") {
+      sendJson(res, 500, { ok: false, error: "APP_URL must use https" });
       return;
     }
 
     const webhookUrl = `${appUrl}/api/telegram/webhook`;
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+    if (!secret) {
+      sendJson(res, 500, {
+        ok: false,
+        error: "Missing TELEGRAM_WEBHOOK_SECRET; webhook requests are rejected without it"
+      });
+      return;
+    }
     const body: Record<string, unknown> = {
       url: webhookUrl,
       allowed_updates: ["message", "callback_query"]

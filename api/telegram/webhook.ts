@@ -1,5 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
+import { validateConfig } from "../../src/config.js";
+import { runMigrations } from "../../src/db/migrations.js";
+
 export const config = {
   maxDuration: 30
 };
@@ -68,6 +71,8 @@ export default async function handler(
     }
 
     try {
+      validateConfig();
+      runMigrations();
       const { bot } = await import("../../src/bot/bot.js");
       await bot.handleUpdate(update as object);
       sendJson(res, 200, { ok: true });
