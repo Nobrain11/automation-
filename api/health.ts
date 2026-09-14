@@ -1,4 +1,13 @@
-export default function handler(): Response {
+import type { IncomingMessage, ServerResponse } from "node:http";
+
+export const config = {
+  maxDuration: 10
+};
+
+export default function handler(
+  _req: IncomingMessage,
+  res: ServerResponse
+): void {
   let rpcHost = "unknown";
   try {
     const rpc =
@@ -16,7 +25,7 @@ export default function handler(): Response {
     ""
   ).replace(/\/$/, "");
 
-  return Response.json({
+  const body = JSON.stringify({
     ok: true,
     chain: "solana",
     rpcHost,
@@ -30,4 +39,10 @@ export default function handler(): Response {
     webBaseUrl: webBaseUrl || null,
     runtime: process.env.VERCEL ? "vercel" : "node"
   });
+
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store"
+  });
+  res.end(body);
 }

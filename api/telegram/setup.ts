@@ -1,40 +1,63 @@
-import { logger } from "../../src/utils/logger.js";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 export const config = {
   maxDuration: 30
 };
 
-function requiredEnv(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
-  return value;
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  body: Record<string, unknown>
+): void {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify(body));
 }
 
-export default async function handler(request: Request): Promise<Response> {
-  if (request.method !== "GET") {
-    return Response.json({ ok: false, error: "method_not_allowed" }, { status: 405 });
-  }
-
+export default async function handler(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
   try {
+    if (req.method !== "GET") {
+      sendJson(res, 405, { ok: false, error: "method_not_allowed" });
+      return;
+    }
+
+    const url = new URL(
+      req.url || "/",
+      `https://${req.headers.host || "localhost"}`
+    );
+
     const setupToken = process.env.TELEGRAM_WEBHOOK_SETUP_TOKEN?.trim();
-    if (!setupToken) {
-      return Response.json(
-        { ok: false, error: "setup_not_configured" },
-        { status: 503 }
-      );
+    if (setupToken) {
+      const supplied = url.searchParams.get("token")?.trim();
+      if (supplied !== setupToken) {
+        sendJson(res, 401, { ok: false, error: "unauthorized" });
+        return;
+      }
     }
 
-    const suppliedToken = new URL(request.url).searchParams.get("token")?.trim();
-    if (suppliedToken !== setupToken) {
-      return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
+    const token =
+      process.env.TELEGRAM_BOT_TOKEN?.trim() || process.env.BOT_TOKEN?.trim();
+    if (!token) {
+      sendJson(res, 500, {
+        ok: false,
+        error: "Missing TELEGRAM_BOT_TOKEN"
+      });
+      return;
     }
 
-    const token = requiredEnv("TELEGRAM_BOT_TOKEN");
     const appUrl = (
       process.env.APP_URL?.trim() ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL.trim()}` : "")
+      process.env.WEB_BASE_URL?.trim() ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "")
     ).replace(/\/$/, "");
-    if (!appUrl) throw new Error("Missing required environment variable: APP_URL");
+
+    if (!appUrl) {
+      sendJson(res, 500, { ok: false, error: "Missing APP_URL" });
+      return;
+    }
+
     const webhookUrl = `${appUrl}/api/telegram/webhook`;
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
     const body: Record<string, unknown> = {
@@ -48,18 +71,24 @@ export default async function handler(request: Request): Promise<Response> {
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(8_000)
+        body: JSON.stringify(body)
       }
     );
-    const telegramResult = await telegramResponse.json();
+    const telegramResult = (await telegramResponse.json()) as Record<
+      string,
+      unknown
+    >;
 
-    return Response.json(
-      { ok: telegramResponse.ok && telegramResult.ok === true, webhookUrl, telegram: telegramResult },
-      { status: telegramResponse.ok && telegramResult.ok === true ? 200 : 502 }
-    );
+    const ok = telegramResponse.ok && telegramResult.ok === true;
+    sendJson(res, ok ? 200 : 502, {
+      ok,
+      webhookUrl,
+      telegram: telegramResult
+    });
   } catch (error) {
-    logger.error("Telegram webhook setup failed", error);
-    return Response.json({ ok: false, error: error instanceof Error ? error.message : "setup_failed" }, { status: 500 });
+    sendJson(res, 500, {
+      ok: false,
+      error: error instanceof Error ? error.message : "setup_failed"
+    });
   }
 }
