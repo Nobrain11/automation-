@@ -10,8 +10,7 @@ import {
   getSettings,
   hasReferralRecord,
   setAwaitingInput,
-  updateSettings,
-  userExists
+  updateSettings
 } from "../db/repositories.js";
 import { logger } from "../utils/logger.js";
 import {
@@ -101,12 +100,11 @@ function adminTimestamp(): string {
 function requireUser(ctx: Context): number {
   const id = ctx.from?.id;
   if (!id) throw new Error("No user");
-  if (!userExists(id)) {
-    ensureUser(id, {
-      username: ctx.from?.username,
-      first_name: ctx.from?.first_name
-    });
-  }
+  ensureUser(id, {
+    username: ctx.from?.username,
+    first_name: ctx.from?.first_name,
+    last_name: ctx.from?.last_name
+  });
   return id;
 }
 

@@ -133,8 +133,8 @@ export function saveWallet(
   const existingCount = (
     db
       .prepare(`SELECT COUNT(*) AS count FROM wallets WHERE telegram_id = ?`)
-      .get(telegramId) as { count: number }
-  ).count;
+      .get(telegramId) as { count?: number } | undefined
+  )?.count ?? 0;
 
   db.prepare(`UPDATE wallets SET is_active = 0 WHERE telegram_id = ?`).run(
     telegramId
@@ -273,8 +273,8 @@ export function getReferralStats(telegramId: number): {
   const referredCount = (
     db
       .prepare(`SELECT COUNT(*) AS count FROM referrals WHERE referred_by = ?`)
-      .get(telegramId) as { count: number }
-  ).count;
+      .get(telegramId) as { count?: number } | undefined
+  )?.count ?? 0;
   const totalEarnedSol = (
     db
       .prepare(
@@ -291,16 +291,20 @@ export function getReferralStats(telegramId: number): {
 }
 
 export function getSettings(telegramId: number): AutoSettings {
+  ensureUser(telegramId, {});
   const row = db
     .prepare(`SELECT * FROM auto_settings WHERE telegram_id = ?`)
     .get(telegramId) as AutoSettings | undefined;
-  if (!row) {
-    ensureUser(telegramId, {});
-    return db
-      .prepare(`SELECT * FROM auto_settings WHERE telegram_id = ?`)
-      .get(telegramId) as AutoSettings;
-  }
-  return row;
+  if (row) return row;
+
+  const now = Date.now();
+  db.prepare(
+    `INSERT OR IGNORE INTO auto_settings (telegram_id, updated_at) VALUES (?, ?)`
+  ).run(telegramId, now);
+
+  return db
+    .prepare(`SELECT * FROM auto_settings WHERE telegram_id = ?`)
+    .get(telegramId) as AutoSettings;
 }
 
 export function updateSettings(
