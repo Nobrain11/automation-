@@ -125,6 +125,52 @@ async function walletSummary(telegramId: number): Promise<string> {
   return `👛 <b>WALLET</b>\n\n<code>${address}</code>\nBalance: <b>${bal}</b>`;
 }
 
+const editableSettings = new Set([
+  "max_buy",
+  "slippage",
+  "stop_loss",
+  "trailing_after",
+  "trailing_pullback",
+  "time_stop_minutes",
+  "daily_loss_cap",
+  "max_trades_hour",
+  "max_trades_day",
+  "tp"
+]);
+
+function settingPrompt(field: string): string {
+  const labels: Record<string, string> = {
+    max_buy: "Max Buy in SOL",
+    slippage: "Slippage percentage",
+    stop_loss: "Stop Loss percentage",
+    trailing_after: "Trailing After percentage",
+    trailing_pullback: "Trailing Pullback percentage",
+    time_stop_minutes: "Time Stop in minutes",
+    daily_loss_cap: "Daily Loss Cap in SOL",
+    max_trades_hour: "Maximum trades per hour",
+    max_trades_day: "Maximum trades per day",
+    tp: "Take Profit tiers as profit:sell pairs, comma-separated (example: 40:50,100:25,200:15)"
+  };
+  return `Send the new <b>${labels[field] ?? field}</b>.\n\nSend /cancel to keep the current value.`;
+}
+
+function parseSetting(field: string, text: string): number | string | null {
+  if (field === "tp") {
+    const tiers = text.split(",").map((part) => {
+      const [profit, sellPercent] = part.trim().split(":").map(Number);
+      if (!Number.isFinite(profit) || !Number.isFinite(sellPercent) || profit <= 0 || sellPercent <= 0 || sellPercent > 100) throw new Error("Use pairs like 40:50,100:25,200:15.");
+      return { profit, sellPercent };
+    });
+    if (!tiers.length) throw new Error("Add at least one take-profit tier.");
+    return JSON.stringify(tiers);
+  }
+  const value = Number(text);
+  if (!Number.isFinite(value) || value < 0) throw new Error("Send a valid non-negative number.");
+  if (["slippage", "stop_loss", "trailing_after", "trailing_pullback"].includes(field) && value > 100) throw new Error("Percentage must be between 0 and 100.");
+  if (["max_trades_hour", "max_trades_day", "time_stop_minutes"].includes(field) && !Number.isInteger(value)) throw new Error("This value must be a whole number.");
+  return value;
+}
+
 function registerHandlers() {
   bot.command("start", async (ctx) => {
     const id = requireUser(ctx);
@@ -327,6 +373,20 @@ function registerHandlers() {
       return;
     }
 
+    if (data.startsWith("setting:")) {
+      const field = data.slice("setting:".length);
+      if (field === "smart_money") {
+        const current = getSettings(id);
+        updateSettings(id, { smart_money_boost: current.smart_money_boost ? 0 : 1 });
+        await ctx.reply(settingsText(id), { parse_mode: "HTML", reply_markup: settingsKeyboard(getSettings(id)) });
+        return;
+      }
+      if (!editableSettings.has(field)) return;
+      setAwaitingInput(id, `setting:${field}`);
+      await ctx.reply(settingPrompt(field), { parse_mode: "HTML" });
+      return;
+    }
+
     if (data === "referral") {
       await ctx.reply(referralText(id, ctx.me.username ?? null), {
         parse_mode: "HTML",
@@ -399,6 +459,23 @@ function registerHandlers() {
     if (text.startsWith("/")) return;
 
     const awaiting = getAwaitingInput(id);
+    if (awaiting?.startsWith("setting:")) {
+      const field = awaiting.slice("setting:".length);
+      if (text === "/cancel") {
+        setAwaitingInput(id, null);
+        await ctx.reply(settingsText(id), { parse_mode: "HTML", reply_markup: settingsKeyboard(getSettings(id)) });
+        return;
+      }
+      try {
+        const value = parseSetting(field, text);
+        updateSettings(id, { [field === "tp" ? "tp_tiers" : field]: value } as Parameters<typeof updateSettings>[1]);
+        setAwaitingInput(id, null);
+        await ctx.reply(`Saved ${field}.\n\n${settingsText(id)}`, { parse_mode: "HTML", reply_markup: settingsKeyboard(getSettings(id)) });
+      } catch (error) {
+        await ctx.reply(error instanceof Error ? error.message : "Invalid setting. Try again or send /cancel.");
+      }
+      return;
+    }
     if (awaiting === "import_wallet") {
       setAwaitingInput(id, null);
       try {
