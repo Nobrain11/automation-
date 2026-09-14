@@ -38,11 +38,15 @@ export default async function handler(request: Request): Promise<Response> {
     };
     if (secret) body.secret_token = secret;
 
-    const telegramResponse = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body)
-    });
+    const telegramResponse = await fetch(
+      `https://api.telegram.org/bot${token}/setWebhook`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8_000)
+      }
+    );
     const telegramResult = await telegramResponse.json();
 
     return Response.json(
