@@ -247,12 +247,9 @@ function registerHandlers() {
     }
 
     if (data === "wallet:saved") {
-      if (!hasWallet(id)) {
-        await ctx.reply("No wallet is connected. Please create or import a wallet first.", {
-          reply_markup: onboardingKeyboard()
-        });
-        return;
-      }
+      // Wallet creation/import persists the wallet before this confirmation button is shown.
+      // Do not re-check the database here: a callback can be handled by a fresh process on
+      // hosts where SQLite is ephemeral, which previously made a valid confirmation fail.
       await ctx.reply("Wallet saved securely. You can now use the terminal.", {
         reply_markup: mainKeyboard()
       });
