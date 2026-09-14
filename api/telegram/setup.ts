@@ -17,11 +17,16 @@ export default async function handler(request: Request): Promise<Response> {
 
   try {
     const setupToken = process.env.TELEGRAM_WEBHOOK_SETUP_TOKEN?.trim();
-    if (setupToken) {
-      const suppliedToken = new URL(request.url).searchParams.get("token")?.trim();
-      if (suppliedToken !== setupToken) {
-        return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
-      }
+    if (!setupToken) {
+      return Response.json(
+        { ok: false, error: "setup_not_configured" },
+        { status: 503 }
+      );
+    }
+
+    const suppliedToken = new URL(request.url).searchParams.get("token")?.trim();
+    if (suppliedToken !== setupToken) {
+      return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
     }
 
     const token = requiredEnv("TELEGRAM_BOT_TOKEN");
