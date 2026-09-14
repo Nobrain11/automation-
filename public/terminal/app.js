@@ -16,7 +16,6 @@ async function api(path, opts = {}) {
     ...opts
   });
   if (res.status === 401) {
-    showGate();
     throw new Error("unauthorized");
   }
   return res.json();

@@ -79,6 +79,10 @@ function requireAuth(req: IncomingMessage, res: ServerResponse): number | null {
   return telegramId;
 }
 
+function viewerId(req: IncomingMessage): number {
+  return resolveSession(parseCookies(req.headers.cookie).sid) ?? 0;
+}
+
 function staticRoots(): string[] {
   return [
     join(process.cwd(), "dist", "public", "terminal"),
@@ -191,31 +195,23 @@ export async function handleWebRequest(req: IncomingMessage, res: ServerResponse
       return;
     }
 
-    if (path === "/api/me" && req.method === "GET") {
-      const id = requireAuth(req, res);
-      if (!id) return;
-      sendJson(res, 200, { ok: true, telegramId: id });
+  if (path === "/api/me" && req.method === "GET") {
+    sendJson(res, 200, { ok: true, telegramId: viewerId(req), public: true });
       return;
     }
 
-    if (path === "/api/dashboard" && req.method === "GET") {
-      const id = requireAuth(req, res);
-      if (!id) return;
-      sendJson(res, 200, await buildDashboard(id));
+  if (path === "/api/dashboard" && req.method === "GET") {
+    sendJson(res, 200, await buildDashboard(viewerId(req)));
       return;
     }
 
-    if (path === "/api/activity" && req.method === "GET") {
-      const id = requireAuth(req, res);
-      if (!id) return;
-      sendJson(res, 200, await buildActivity(id));
+  if (path === "/api/activity" && req.method === "GET") {
+    sendJson(res, 200, await buildActivity(viewerId(req)));
       return;
     }
 
-    if (path === "/api/pulse" && req.method === "GET") {
-      const id = requireAuth(req, res);
-      if (!id) return;
-      sendJson(res, 200, await buildPulse(id));
+  if (path === "/api/pulse" && req.method === "GET") {
+    sendJson(res, 200, await buildPulse(viewerId(req)));
       return;
     }
 
