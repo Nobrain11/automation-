@@ -6,6 +6,23 @@ export const config = {
 };
 
 let botInitPromise: Promise<void> | undefined;
+const processedUpdates = new Set<number>();
+const processedUpdateOrder: number[] = [];
+const MAX_PROCESSED_UPDATES = 512;
+
+function isDuplicateUpdate(update: unknown): boolean {
+  if (!update || typeof update !== "object" || !("update_id" in update)) return false;
+  const updateId = (update as { update_id?: unknown }).update_id;
+  if (typeof updateId !== "number" || !Number.isSafeInteger(updateId)) return false;
+  if (processedUpdates.has(updateId)) return true;
+  processedUpdates.add(updateId);
+  processedUpdateOrder.push(updateId);
+  if (processedUpdateOrder.length > MAX_PROCESSED_UPDATES) {
+    const oldest = processedUpdateOrder.shift();
+    if (oldest !== undefined) processedUpdates.delete(oldest);
+  }
+  return false;
+}
 
 async function initializeBot(bot: { init: () => Promise<void> }): Promise<void> {
   botInitPromise ??= bot.init();
@@ -72,6 +89,11 @@ export default async function handler(
 
     if (!update || typeof update !== "object") {
       sendJson(res, 400, { ok: false, error: "invalid_update" });
+      return;
+    }
+
+    if (isDuplicateUpdate(update)) {
+      sendJson(res, 200, { ok: true, duplicate: true });
       return;
     }
 
