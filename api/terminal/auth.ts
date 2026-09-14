@@ -1,11 +1,21 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 const LOGIN_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function signingKey(): Buffer {
-  return Buffer.from(process.env.WALLET_ENCRYPTION_KEY!.trim(), "base64");
+  const raw = process.env.WALLET_ENCRYPTION_KEY?.trim();
+  if (!raw) {
+    throw new Error("WALLET_ENCRYPTION_KEY is missing");
+  }
+  try {
+    const decoded = Buffer.from(raw, "base64");
+    if (decoded.length === 32) return decoded;
+  } catch {
+    /* fall through */
+  }
+  return createHash("sha256").update(raw).digest();
 }
 
 function verifyLoginToken(token: string): number | null {
@@ -15,7 +25,7 @@ function verifyLoginToken(token: string): number | null {
   const telegramId = Number(idText);
   const expiry = Number(expiryText);
   if (!Number.isSafeInteger(telegramId) || !Number.isFinite(expiry)) return null;
-  if (Date.now() > expiry || expiry > Date.now() + LOGIN_TTL_MS) return null;
+  if (Date.now() > expiry) return null;
 
   const expected = createHmac("sha256", signingKey())
     .update(`${idText}.${expiryText}`)
@@ -41,19 +51,19 @@ function createSession(telegramId: number): string {
 }
 
 function requestUrl(request: IncomingMessage): URL {
-  return new URL(request.url || "/", `https://${request.headers.host || "localhost"}`);
+  return new URL(
+    request.url || "/",
+    `https://${request.headers.host || "localhost"}`
+  );
 }
-
 
 function sendText(
   response: ServerResponse,
   statusCode: number,
-  body: string,
-  headers: Record<string, string> = {}
+  body: string
 ): void {
   response.writeHead(statusCode, {
-    "Content-Type": "text/plain; charset=utf-8",
-    ...headers
+    "Content-Type": "text/plain; charset=utf-8"
   });
   response.end(body);
 }
@@ -82,7 +92,7 @@ export default function handler(
       sendText(
         response,
         500,
-        "Server misconfigured: WALLET_ENCRYPTION_KEY is missing in Vercel env."
+        "Server misconfigured: set WALLET_ENCRYPTION_KEY in Vercel Environment Variables."
       );
       return;
     }
@@ -110,7 +120,7 @@ export default function handler(
 
     const session = createSession(telegramId);
     response.writeHead(302, {
-      Location: "/terminal",
+      Location: "/",
       "Set-Cookie": `sid=${encodeURIComponent(session)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`
     });
     response.end();

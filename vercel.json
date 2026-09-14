@@ -1,16 +1,17 @@
 {
   "functions": {
-    "api/telegram/webhook.ts": {
-      "maxDuration": 30
-    }
+    "api/health.ts": { "maxDuration": 10 },
+    "api/terminal/auth.ts": { "maxDuration": 10 },
+    "api/telegram/webhook.ts": { "maxDuration": 30 },
+    "api/telegram/setup.ts": { "maxDuration": 30 },
+    "api/terminal/[...path].ts": { "maxDuration": 30 }
   },
-  "routes": [
-    { "src": "/health", "dest": "/api/health" },
-    { "src": "/auth/telegram", "dest": "/api/terminal/auth" },
-    { "src": "/api/(.*)", "dest": "/api/terminal/$1" },
-    { "src": "/terminal", "dest": "/terminal/index.html" },
-    { "src": "/terminal/(.*)", "dest": "/terminal/$1" },
-    { "src": "/", "dest": "/terminal/index.html" },
-    { "src": "/(.*)", "dest": "/terminal/$1" }
+  "rewrites": [
+    { "source": "/health", "destination": "/api/health" },
+    { "source": "/auth/telegram", "destination": "/api/terminal/auth" },
+    { "source": "/auth/callback", "destination": "/api/terminal/auth" },
+    { "source": "/terminal", "destination": "/terminal/index.html" },
+    { "source": "/terminal/(.*)", "destination": "/terminal/$1" },
+    { "source": "/", "destination": "/terminal/index.html" }
   ]
 }

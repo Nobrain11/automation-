@@ -1,5 +1,3 @@
-import { logger } from "../../src/utils/logger.js";
-
 export const config = {
   maxDuration: 30
 };
@@ -22,10 +20,9 @@ export default async function handler(request: Request): Promise<Response> {
     }
   }
 
-  if (
-    !process.env.TELEGRAM_BOT_TOKEN?.trim() &&
-    !process.env.BOT_TOKEN?.trim()
-  ) {
+  const token =
+    process.env.TELEGRAM_BOT_TOKEN?.trim() || process.env.BOT_TOKEN?.trim();
+  if (!token) {
     return Response.json(
       { ok: false, error: "missing_bot_token" },
       { status: 500 }
@@ -42,17 +39,11 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     const { bot } = await import("../../src/bot/bot.js");
-    await bot.handleUpdate(update as any);
+    await bot.handleUpdate(update as object);
     return Response.json({ ok: true });
   } catch (error) {
-    logger.error("Telegram webhook update failed", error);
-    // Telegram retries on non-2xx; acknowledge to avoid loops
-    return Response.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "update_failed"
-      },
-      { status: 200 }
-    );
+    const message = error instanceof Error ? error.message : "update_failed";
+    console.error("Telegram webhook update failed", error);
+    return Response.json({ ok: false, error: message }, { status: 200 });
   }
 }
