@@ -1,91 +1,101 @@
-# PUMP AUTO — Go Live Checklist
+# PUMP AUTO — Go Live (Phase 1)
 
-## 1. Vercel Variables (required for webhook deployment)
+**Do not run the trading bot as the only process on Vercel serverless.**  
+Vercel is fine for static terminal files. The bot needs **one always-on Node process + persistent disk**.
 
-| Variable | Notes |
-|----------|-------|
-| `TELEGRAM_BOT_TOKEN` | Token from @BotFather |
-| `TELEGRAM_WEBHOOK_SECRET` | Random secret; must match Telegram's webhook header |
-| `TELEGRAM_WEBHOOK_SETUP_TOKEN` | Separate random token for the setup endpoint |
-| `WALLET_ENCRYPTION_KEY` | Base64 value decoding to 32 bytes |
-| `DATABASE_PATH` | Use a persistent external database or storage for production data |
-| `WEB_BASE_URL` | Deployed HTTPS URL, without a trailing slash |
+---
 
-After deploying, register Telegram's webhook once:
+## Recommended: Docker on any VPS
+
+Works on Oracle Cloud free ARM, Hetzner, DigitalOcean, etc.
+
+### 1. Server prep
 
 ```bash
-curl -X POST "https://YOUR-VERCEL-DOMAIN/api/telegram/setup" \\
-  -H "Authorization: Bearer YOUR_TELEGRAM_WEBHOOK_SETUP_TOKEN"
+sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
+sudo usermod -aG docker $USER   # re-login after
 ```
 
-Then verify it:
+### 2. Clone & configure
 
 ```bash
-curl "https://api.telegram.org/botYOUR_BOT_TOKEN/getWebhookInfo"
+git clone https://github.com/Nobrain11/automation-.git
+cd automation-
+cp .env.example .env
+nano .env
 ```
 
-The response should show `https://YOUR-VERCEL-DOMAIN/api/telegram/webhook` and no recent delivery errors. Do not run the long-polling `src/index.ts` process on Vercel.
+Set at minimum:
 
-## 2. Railway Variables (required)
+```env
+TELEGRAM_BOT_TOKEN=...
+WALLET_ENCRYPTION_KEY=...   # generate once, never rotate casually
+WEB_BASE_URL=https://YOUR_PUBLIC_URL
+APP_URL=https://YOUR_PUBLIC_URL
+SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=...
+DATABASE_PATH=/data/bot.sqlite
+```
 
-| Variable | Example | Notes |
-|----------|---------|-------|
-| `BOT_TOKEN` | from @BotFather | Required |
-| `WALLET_ENCRYPTION_KEY` | base64 32-byte key | **Never change** after wallets exist |
-| `DATABASE_PATH` | `/data/bot.sqlite` | Required for persistence |
-| `WEB_BASE_URL` | `https://your-app.up.railway.app` | No trailing slash |
-| `SOLANA_RPC_URL` | Helius / your RPC | Strongly recommended |
-| `PORT` | `3000` | Railway sets this usually |
-| `ADMIN_TELEGRAM_ID` | your Telegram user id | Optional admin alerts |
-
-Generate encryption key once:
+Generate encryption key:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-## 2. Persistent volume (required for wallets)
+### 3. Start
 
-1. Railway → service → **Volumes** → Add
-2. Mount path: `/data`
-3. Redeploy
-4. Open `https://YOUR-APP/health`
+```bash
+docker compose up -d --build
+docker compose logs -f
+```
+
+### 4. Health check
+
+```bash
+curl -s https://YOUR_PUBLIC_URL/health | jq
+```
 
 Expect:
 
 ```json
 {
   "ok": true,
+  "phase1": { "db": true, "telegram": true, "rpc": true },
   "persistentVolume": true,
   "walletRows": 0
 }
 ```
 
-After first wallet create/import, `walletRows` ≥ 1 and stays after redeploy.
+Put Caddy or nginx in front for HTTPS, or use a tunnel.
 
-## 3. Telegram
+---
 
-1. `/start` on the bot
-2. Create or **import** wallet (save the key offline)
-3. Fund wallet with SOL
-4. Open **WEB TERMINAL** from the bot menu
-5. Confirm trending loads (pump.fun movers)
+## Alternative: Railway
 
-## 4. Smoke test
+1. New service from this repo  
+2. **Volume** mount path `/data`  
+3. Env: `TELEGRAM_BOT_TOKEN`, `WALLET_ENCRYPTION_KEY`, `DATABASE_PATH=/data/bot.sqlite`, `WEB_BASE_URL`, `SOLANA_RPC_URL`  
+4. **Replicas = 1** (Telegram 409 if two)  
+5. Deploy → open `/health`
 
-- [ ] `/health` returns `ok: true`
-- [ ] Telegram responds to `/start`
-- [ ] Wallet persists after redeploy
-- [ ] Web terminal login works
-- [ ] TRENDING shows real tokens or honest OFFLINE
-- [ ] Settings save
-- [ ] Emergency stop works
+---
 
-## 5. Logo assets
+## Phase 1 acceptance (must all pass)
 
-- `/logo.svg` — app mark (green bolt on dark tile)
-- `/favicon.svg` — browser tab icon
+- [ ] `GET /health` → `ok: true`
+- [ ] Telegram `/start` responds
+- [ ] Create or import wallet once
+- [ ] Redeploy / restart container → **same wallet still there**
+- [ ] Web terminal opens from bot link with session
+- [ ] `/api/trending` returns real data or honest empty (no fake rows)
+- [ ] Buy small amount → position row created
+- [ ] Kill switch stops new auto entries
 
-## Risk note
+---
 
-This is live market automation. Only use funds you can afford to lose.
+## What not to do
+
+- Do not change `WALLET_ENCRYPTION_KEY` after users have wallets  
+- Do not run two bot instances on the same token  
+- Do not rely on Vercel `/tmp` SQLite for production wallets  
+- Do not claim LIVE/READY in UI unless `/health` and scanner stats confirm it  

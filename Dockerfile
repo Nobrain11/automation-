@@ -6,20 +6,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Persistent data dir (Railway volume should mount here)
-RUN mkdir -p /data
+RUN mkdir -p /data /app/data
 
-COPY package.json package-lock.json* ./
-RUN npm install
+COPY package.json package-lock.json* pnpm-lock.yaml* ./ 
+
+# Prefer npm for simpler Docker builds; lockfile optional
+RUN npm install --omit=dev
 
 COPY tsconfig.json ./
 COPY scripts ./scripts
 COPY src ./src
 COPY public ./public
 
-RUN npm run build \
+RUN npm install --include=dev typescript tsx @types/node @types/better-sqlite3 \
+  && npm run build \
   && mkdir -p dist/public \
-  && cp -r public/* dist/public/
+  && cp -r public/* dist/public/ \
+  && npm prune --omit=dev
 
 ENV NODE_ENV=production
 ENV PORT=3000
