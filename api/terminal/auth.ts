@@ -120,7 +120,7 @@ export default function handler(
 
     const session = createSession(telegramId);
     response.writeHead(302, {
-      Location: "/",
+      Location: "/terminal",
       "Set-Cookie": `sid=${encodeURIComponent(session)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`
     });
     response.end();

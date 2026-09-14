@@ -11,13 +11,18 @@ export default async function handler(request: Request): Promise<Response> {
   }
 
   const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
-  if (expectedSecret) {
-    const receivedSecret = request.headers
-      .get("x-telegram-bot-api-secret-token")
-      ?.trim();
-    if (receivedSecret !== expectedSecret) {
-      return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    }
+  if (!expectedSecret) {
+    return Response.json(
+      { ok: false, error: "webhook_not_configured" },
+      { status: 503 }
+    );
+  }
+
+  const receivedSecret = request.headers
+    .get("x-telegram-bot-api-secret-token")
+    ?.trim();
+  if (receivedSecret !== expectedSecret) {
+    return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   const token =
