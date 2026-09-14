@@ -43,7 +43,7 @@ export function openPosition(input: {
       input.entryPriceUsd ?? null,
       now
     );
-  return Number(result.lastInsertRowid);
+  return Number((result as unknown as { lastInsertRowid: number | bigint }).lastInsertRowid);
 }
 
 export function updatePositionPeak(positionId: number, peakPnlPct: number): void {
