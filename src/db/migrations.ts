@@ -149,10 +149,7 @@ function addColumnIfMissing(table: string, column: string, type: string): void {
     .prepare(`PRAGMA table_info(${table})`)
     .all() as { name: string }[];
 
-  const hasColumn = existing.some((col) => col.name === column);
-
-  if (!hasColumn) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${table === "positions" ? column : column} ${type}`.replace(`${table} ${column}`, column));
-    // Fixed below
-  }
+  if (existing.some((col) => col.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  console.log(`[migrations] Added missing column ${table}.${column}`);
 }
