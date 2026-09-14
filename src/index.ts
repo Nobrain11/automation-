@@ -90,6 +90,13 @@ async function main() {
       logger.error("WS scanner failed (HTTP discovery still running).", error)
     );
 
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    logger.info(
+      "Serverless runtime detected; Telegram updates are handled by the webhook endpoint."
+    );
+    return;
+  }
+
   await startTelegramSafely();
 }
 
