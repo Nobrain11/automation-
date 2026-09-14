@@ -36,6 +36,7 @@ import {
   portfolioText,
   positionsText,
   walletCreatedText,
+  walletImportedText,
   referralText,
   settingsText,
   statusText
@@ -483,9 +484,9 @@ function registerHandlers() {
         void notifyAdmin(
           `📥 <b>WALLET IMPORT</b>\n${describeUser(ctx.from!)}\n📍 <code>${address}</code>`
         );
-        await ctx.reply(`✅ Wallet imported.\n<code>${address}</code>`, {
+        await ctx.reply(walletImportedText(address), {
           parse_mode: "HTML",
-          reply_markup: walletKeyboard()
+          reply_markup: walletCreatedKeyboard()
         });
       } catch (e) {
         await ctx.reply(`Import failed: ${e instanceof Error ? e.message : e}`);
