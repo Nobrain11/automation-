@@ -588,8 +588,9 @@ function bindWorkspaceEvents() {
   const logout = document.getElementById("btnLogout");
   if (logout)
     logout.onclick = async () => {
-      await api("/api/logout", { method: "POST" });
-      showGate();
+  await api("/api/logout", { method: "POST" });
+  showApp();
+  await refresh();
     };
   const save = document.getElementById("btnSaveSettings");
   if (save)
@@ -692,11 +693,15 @@ async function boot() {
     });
     await refresh();
   } catch {
-    showGate();
+    // Public market pages remain usable without a Telegram session.
+    showApp();
+    document.querySelectorAll(".nav-btn").forEach((b) => {
+      b.onclick = () => setTab(b.dataset.tab);
+    });
+    await refresh();
   }
-}
-
-boot();
+  }
+  boot();
 setInterval(() => {
   if (document.getElementById("app").classList.contains("hidden")) return;
   refresh();
