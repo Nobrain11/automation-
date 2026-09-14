@@ -1,4 +1,49 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+const LOGIN_TTL_MS = 10 * 60 * 1000;
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function signingKey(): Buffer {
+  return Buffer.from(process.env.WALLET_ENCRYPTION_KEY!.trim(), "base64");
+}
+
+function verifyLoginToken(token: string): number | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [idText, expiryText, signature] = parts;
+  const telegramId = Number(idText);
+  const expiry = Number(expiryText);
+  if (!Number.isSafeInteger(telegramId) || !Number.isFinite(expiry)) return null;
+  if (Date.now() > expiry || expiry > Date.now() + LOGIN_TTL_MS) return null;
+
+  const expected = createHmac("sha256", signingKey())
+    .update(`${idText}.${expiryText}`)
+    .digest("base64url");
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (
+    actualBuffer.length !== expectedBuffer.length ||
+    !timingSafeEqual(actualBuffer, expectedBuffer)
+  ) {
+    return null;
+  }
+  return telegramId;
+}
+
+function createSession(telegramId: number): string {
+  const expiry = Date.now() + SESSION_TTL_MS;
+  const payload = `web.${telegramId}.${expiry}`;
+  const signature = createHmac("sha256", signingKey())
+    .update(payload)
+    .digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function requestUrl(request: IncomingMessage): URL {
+  return new URL(request.url || "/", `https://${request.headers.host || "localhost"}`);
+}
+
 
 function sendText(
   response: ServerResponse,
@@ -18,9 +63,7 @@ export default async function handler(
   response: ServerResponse
 ): Promise<void> {
   try {
-    const host = request.headers.host || "localhost";
-    const url = new URL(request.url || "/", `https://${host}`);
-    const token = url.searchParams.get("token");
+    const token = requestUrl(request).searchParams.get("token");
 
     if (!token) {
       sendText(
@@ -39,10 +82,6 @@ export default async function handler(
       );
       return;
     }
-
-    const { createSession, verifyLoginToken } = await import(
-      "../../src/web/auth.js"
-    );
 
     let telegramId: number | null = null;
     try {
