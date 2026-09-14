@@ -1,6 +1,6 @@
 // src/web/auth.ts — signed web sessions (no private keys)
 
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { config } from "../config.js";
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -8,7 +8,16 @@ const LOGIN_TTL_MS = 10 * 60 * 1000;
 const SESSION_PREFIX = "web";
 
 function signingKey(): Buffer {
-  return Buffer.from(config.walletEncryptionKey, "base64");
+  const raw =
+    process.env.WALLET_ENCRYPTION_KEY?.trim() || config.walletEncryptionKey;
+  try {
+    const decoded = Buffer.from(raw, "base64");
+    if (decoded.length === 32) return decoded;
+  } catch {
+    /* fall through */
+  }
+  // Same derivation as api/terminal/auth.ts and config.encryptionKeySafe
+  return createHash("sha256").update(raw).digest();
 }
 
 export function createLoginToken(telegramId: number): string {
