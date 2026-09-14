@@ -22,11 +22,13 @@ import {
   logout
 } from "../services/wallet.js";
 import { createLoginToken } from "../web/auth.js";
+import { scanner } from "../scanner/scanner-instance.js";
 import {
   mainKeyboard,
   onboardingKeyboard,
   referralKeyboard,
   settingsKeyboard,
+  scannerKeyboard,
   walletCreatedKeyboard,
   walletKeyboard
 } from "./keyboards.js";
@@ -39,7 +41,8 @@ import {
   walletImportedText,
   referralText,
   settingsText,
-  statusText
+  statusText,
+  scannerText
 } from "./screens.js";
 
 export const bot = new Bot(config.botToken);
@@ -221,6 +224,14 @@ function registerHandlers() {
     });
   });
 
+  bot.command("scanner", async (ctx) => {
+    requireUser(ctx);
+    await ctx.reply(scannerText(), {
+      parse_mode: "HTML",
+      reply_markup: scannerKeyboard()
+    });
+  });
+
   bot.command("wallet", async (ctx) => {
     const id = requireUser(ctx);
     await ctx.reply(await walletSummary(id), {
@@ -362,6 +373,14 @@ function registerHandlers() {
     if (data === "wallet:logout") {
       logout(id);
       await ctx.reply("Wallet disconnected.", { reply_markup: mainKeyboard() });
+      return;
+    }
+
+    if (data === "scanner" || data === "scanner:passed" || data === "scanner:rejected") {
+      await ctx.reply(scannerText(), {
+        parse_mode: "HTML",
+        reply_markup: scannerKeyboard()
+      });
       return;
     }
 

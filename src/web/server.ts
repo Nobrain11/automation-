@@ -206,7 +206,7 @@ export async function handleWebRequest(req: IncomingMessage, res: ServerResponse
     }
 
   if (path === "/api/activity" && req.method === "GET") {
-    sendJson(res, 200, await buildActivity(viewerId(req)));
+    sendJson(res, 200, buildActivity(40));
       return;
     }
 

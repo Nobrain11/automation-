@@ -663,7 +663,7 @@ function setTab(tab) {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
   render();
-  if (tab === "trending" || tab === "home") {
+  if (tab === "trending" || tab === "home" || tab === "scan") {
     api("/api/trending")
       .then((t) => {
         state.trending = t;
