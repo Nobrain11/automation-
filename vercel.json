@@ -11,7 +11,6 @@
     { "source": "/auth/telegram", "destination": "/api/terminal/auth" },
     { "source": "/auth/callback", "destination": "/api/terminal/auth" },
     { "source": "/terminal", "destination": "/terminal/index.html" },
-    { "source": "/terminal/(.*)", "destination": "/terminal/$1" },
     { "source": "/", "destination": "/terminal/index.html" }
   ]
 }
