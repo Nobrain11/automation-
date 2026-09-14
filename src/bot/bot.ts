@@ -246,6 +246,19 @@ function registerHandlers() {
       return;
     }
 
+    if (data === "wallet:saved") {
+      if (!hasWallet(id)) {
+        await ctx.reply("No wallet is connected. Please create or import a wallet first.", {
+          reply_markup: onboardingKeyboard()
+        });
+        return;
+      }
+      await ctx.reply("Wallet saved securely. You can now use the terminal.", {
+        reply_markup: mainKeyboard()
+      });
+      return;
+    }
+
     if (data === "home" || data === "start") {
       await ctx.reply(await homeText(id), {
         parse_mode: "HTML",
