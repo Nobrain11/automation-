@@ -113,9 +113,33 @@ function renderHome(d) {
     ? `<span class="home-chip">REF ${ref.referredCount ?? 0}</span>`
     : "";
 
+  const statusBlock = `<section class="terminal-status-block" aria-label="Pump Auto status">
+    <div class="terminal-brand">⚡ PUMP AUTO</div>
+    <div class="terminal-subtitle">SOLANA TRADING TERMINAL</div>
+    <div class="terminal-rule">━━━━━━━━━━━━━━━━━━━━</div>
+    <div class="terminal-label">WALLET</div>
+    <div class="terminal-value">${connected ? short(d.wallet.address) : "Not connected"}</div>
+    <div class="terminal-value">${connected && d.wallet?.balanceSol != null ? Number(d.wallet.balanceSol).toFixed(4) : "0.0000"} SOL</div>
+    <div class="terminal-rule">━━━━━━━━━━━━━━━━━━━━</div>
+    <div class="terminal-label">🤖 AUTO-HUNTER</div>
+    <div class="terminal-value">● ${huntOn ? "HUNTING" : "READY"}</div>
+    <div class="terminal-stat-row"><span>Scanner</span><b>${sc.running ? "LIVE" : "OFF"}</b></div>
+    <div class="terminal-stat-row"><span>Discovered</span><b>${sc.discovered ?? 0}</b></div>
+    <div class="terminal-stat-row"><span>Evaluated</span><b>${sc.evaluated ?? 0}</b></div>
+    <div class="terminal-stat-row"><span>Qualified</span><b>${sc.passed ?? 0}</b></div>
+    <div class="terminal-stat-row"><span>Open Positions</span><b>${posCount}</b></div>
+    <div class="terminal-stat-row"><span>Today&apos;s PnL</span><b>${d.pnl?.todaySol == null ? "No data" : `${d.pnl.todaySol} SOL`}</b></div>
+    <div class="terminal-rule">━━━━━━━━━━━━━━━━━━━━</div>
+    <div class="terminal-label">🔥 MARKET</div>
+    <div class="terminal-stat-row"><span>${sc.discovered ?? 0} tokens discovered</span><b>${sc.discovered ?? 0}</b></div>
+    <div class="terminal-stat-row"><span>${sc.passed ?? 0} passed filters</span><b>${sc.passed ?? 0}</b></div>
+    <div class="terminal-stat-row"><span>${sc.evaluated ?? 0} fully evaluated</span><b>${sc.evaluated ?? 0}</b></div>
+  </section>`;
+
   return `
     <div class="home-desk">
-      ${homeTickerHtml()}
+      ${statusBlock}
+      ${homeTickerHtml()}`;
 
       <div class="home-status">
         <div class="home-status-left">

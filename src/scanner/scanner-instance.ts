@@ -1,6 +1,7 @@
 // src/scanner/scanner-instance.ts
 
 import { PumpScanner } from "./scanner.js";
+import { HttpDiscovery } from "./http-discovery.js";
 import { notifyScannerToken } from "./notifier.js";
 import { TokenCandidate } from "./types.js";
 
@@ -25,3 +26,15 @@ export const scanner = new PumpScanner({
     }
   }
 });
+
+export const httpDiscovery = new HttpDiscovery();
+
+export async function startAllDiscovery(): Promise<void> {
+  await scanner.start();
+  httpDiscovery.start();
+}
+
+export async function stopAllDiscovery(): Promise<void> {
+  httpDiscovery.stop();
+  await scanner.stop();
+}

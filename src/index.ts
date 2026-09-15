@@ -8,7 +8,7 @@ import {
   httpDiscovery,
   setHttpDecisionHandler
 } from "./scanner/http-discovery.js";
-import { scanner, setDecisionHandler } from "./scanner/scanner-instance.js";
+import { scanner, setDecisionHandler, startAllDiscovery } from "./scanner/scanner-instance.js";
 import { onTokenDecision } from "./services/hunter.js";
 import {
   startPositionMonitor,
@@ -77,17 +77,10 @@ async function main() {
     logger.error("Position monitor failed to start", error);
   }
 
-  try {
-    httpDiscovery.start(20_000);
-  } catch (error) {
-    logger.error("HTTP discovery failed to start", error);
-  }
-
-  void scanner
-    .start()
-    .then(() => logger.info("Pump.fun log scanner initialized."))
+  void startAllDiscovery()
+    .then(() => logger.info("Pump.fun log and HTTP discovery initialized."))
     .catch((error) =>
-      logger.error("WS scanner failed (HTTP discovery still running).", error)
+      logger.error("Scanner discovery failed to start.", error)
     );
 
   if (

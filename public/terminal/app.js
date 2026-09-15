@@ -442,7 +442,10 @@ function renderMenu(d) {
       <button type="button" class="action ghost" data-menu-back>← Menu</button></div>`;
   }
   if (state.menuView === "support") {
-    return `<div class="panel"><h1>SUPPORT</h1><p class="muted">Use Telegram for wallet export. Never share private keys.</p>
+    const bot = window.__lastDash?.referral?.botUsername;
+    const supportUrl = bot ? `https://t.me/${bot}` : "mailto:support@pumpauto.example?subject=Pump%20Auto%20Support";
+    return `<div class="panel"><h1>SUPPORT</h1><p class="muted">Get help with your wallet, scanner, or trading terminal. Never share private keys.</p>
+      <a class="action primary support-link" href="${supportUrl}" target="_blank" rel="noreferrer">OPEN SUPPORT</a>
       <button type="button" class="action ghost" data-menu-back>← Menu</button></div>`;
   }
   return `<div class="panel"><h1>MENU</h1><div class="menu-list">
