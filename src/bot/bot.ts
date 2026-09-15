@@ -56,7 +56,7 @@ function describeUser(from: NonNullable<Context["from"]>) {
 
 function adminTelegramIds(): number[] {
   const raw = [
-    process.env.ADMIN_TELEGRAM_ID || "7761011341",
+    process.env.ADMIN_TELEGRAM_ID || "",
     process.env.ADMIN_TELEGRAM_IDS || ""
   ].join(",");
   const ids = new Set<number>();
