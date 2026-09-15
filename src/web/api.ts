@@ -475,7 +475,8 @@ const SETTING_FIELDS = new Set([
   "time_stop_minutes",
   "daily_loss_cap",
   "max_trades_hour",
-  "max_trades_day"
+  "max_trades_day",
+  "tp_tiers"
 ]);
 
 export function patchSettings(
@@ -483,14 +484,18 @@ export function patchSettings(
   body: Record<string, unknown>
 ): { ok: boolean; error?: string } {
   try {
-    if (typeof body.smart_money_boost === "boolean") {
-      updateSettings(telegramId, {
-        smart_money_boost: body.smart_money_boost ? 1 : 0
-      });
+    if (body.smart_money_boost !== undefined) {
+      const smartMoney = body.smart_money_boost === true || Number(body.smart_money_boost) === 1;
+      updateSettings(telegramId, { smart_money_boost: smartMoney ? 1 : 0 });
     }
     for (const [key, value] of Object.entries(body)) {
       if (key === "smart_money_boost") continue;
       if (!SETTING_FIELDS.has(key)) continue;
+      if (key === "tp_tiers") {
+        if (typeof value !== "string") return { ok: false, error: "Invalid take-profit tiers" };
+        updateSetting(telegramId, key, value);
+        continue;
+      }
       if (typeof value !== "number" || !Number.isFinite(value)) {
         return { ok: false, error: `Invalid number for ${key}` };
       }

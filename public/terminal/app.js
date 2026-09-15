@@ -387,7 +387,7 @@ function renderPositions(d) {
 function renderMenu(d) {
   if (state.menuView === "status") {
     const sc = d.scanner || {};
-    return `<div class="panel"><h1>STATUS</h1><div class="ws-meta">${hunterLabel(d.hunter)}\nScanner ${sc.running ? "LIVE" : "OFF"}\nDisc ${sc.discovered ?? 0} · Pass ${sc.passed ?? 0}</div>
+    return `<div class="panel"><h1>STATUS</h1><div class="ws-meta">${hunterLabel(d.hunter)}\nScanner ${sc.running ? "LIVE" : "OFF"}\nDiscovered ${sc.discovered ?? 0}\nEvaluated ${sc.evaluated ?? 0}\nPassed ${sc.passed ?? 0} · Rejected ${sc.rejected ?? 0}\nReconnects ${sc.reconnects ?? 0}\nLast event ${sc.lastEventAt ? new Date(sc.lastEventAt).toLocaleString() : "—"}</div>
       <button type="button" class="action ghost" data-menu-back>← Menu</button></div>`;
   }
   if (state.menuView === "wallet") {
@@ -400,9 +400,23 @@ function renderMenu(d) {
   }
   if (state.menuView === "risk") {
     const s = d.settings || {};
-    return `<div class="panel"><h1>RISK CENTER</h1><div class="ws-meta">Max buy ${s.maxBuy ?? "—"} SOL\nSlippage ${s.slippage ?? "—"}%\nStop loss ${s.stopLoss ?? "—"}%\nDaily cap ${s.dailyLossCap ?? "—"} SOL</div>
-      <button type="button" class="action" data-go="trade">Edit in Trade</button>
-      <button type="button" class="action ghost" data-menu-back>← Menu</button></div>`;
+    const tiers = (s.tpTiers || []).map((t) => `${t.profit}:${t.sellPercent}`).join(",");
+    return `<div class="panel"><h1>SETTINGS</h1><p class="muted">Trading engine defaults for Auto-Hunter.</p>
+      <div class="settings-grid">
+        <label class="field">Max buy (SOL)<input id="setMaxBuy" type="number" min="0.01" step="0.01" value="${s.maxBuy ?? ""}" /></label>
+        <label class="field">Slippage (%)<input id="setSlippage" type="number" min="10" max="50" step="1" value="${s.slippage ?? ""}" /></label>
+        <label class="field">Stop loss (%)<input id="setStopLoss" type="number" min="5" max="50" step="1" value="${s.stopLoss ?? ""}" /></label>
+        <label class="field">Trailing after (%)<input id="setTrailingAfter" type="number" min="10" max="100" step="1" value="${s.trailingAfter ?? ""}" /></label>
+        <label class="field">Pullback (%)<input id="setTrailingPullback" type="number" min="5" max="30" step="1" value="${s.trailingPullback ?? ""}" /></label>
+        <label class="field">Time stop (minutes)<input id="setTimeStop" type="number" min="5" max="120" step="1" value="${s.timeStopMinutes ?? ""}" /></label>
+        <label class="field">Daily loss cap (SOL)<input id="setDailyCap" type="number" min="0.1" max="5" step="0.1" value="${s.dailyLossCap ?? ""}" /></label>
+        <label class="field">Max trades / hour<input id="setMaxHour" type="number" min="1" max="10" step="1" value="${s.maxTradesHour ?? ""}" /></label>
+        <label class="field">Max trades / day<input id="setMaxDay" type="number" min="1" max="50" step="1" value="${s.maxTradesDay ?? ""}" /></label>
+        <label class="field field-wide">Take profit tiers <small>profit:sell pairs, e.g. 40:50,100:25,200:15</small><input id="setTpTiers" type="text" value="${tiers}" /></label>
+      </div>
+      <label class="check-field"><input id="setSmartMoney" type="checkbox" ${s.smartMoneyBoost ? "checked" : ""} /> Smart Money boost</label>
+      <div class="row"><button type="button" class="action primary" id="btnSaveFullSettings">SAVE SETTINGS</button><button type="button" class="action ghost" data-menu-back>← Menu</button></div>
+      <div id="settingsNotice" class="muted" role="status"></div></div>`;
   }
   if (state.menuView === "activity") {
     const trades = d.trades || [];
@@ -601,12 +615,30 @@ function bindWorkspaceEvents() {
         stop_loss: Number(document.getElementById("inSl").value),
         daily_loss_cap: Number(document.getElementById("inCap").value)
       };
-      const r = await api("/api/settings", {
-        method: "POST",
-        body: JSON.stringify(body)
-      });
+      const r = await api("/api/settings", { method: "POST", body: JSON.stringify(body) });
       if (!r.ok) alert(r.error || "Save failed");
       await refresh();
+    };
+  const fullSave = document.getElementById("btnSaveFullSettings");
+  if (fullSave)
+    fullSave.onclick = async () => {
+      const value = (id) => Number(document.getElementById(id).value);
+      const body = {
+        max_buy: value("setMaxBuy"), slippage: value("setSlippage"), stop_loss: value("setStopLoss"),
+        trailing_after: value("setTrailingAfter"), trailing_pullback: value("setTrailingPullback"),
+        time_stop_minutes: value("setTimeStop"), daily_loss_cap: value("setDailyCap"),
+        max_trades_hour: value("setMaxHour"), max_trades_day: value("setMaxDay"),
+        tp_tiers: document.getElementById("setTpTiers").value,
+        smart_money_boost: document.getElementById("setSmartMoney").checked ? 1 : 0
+      };
+      fullSave.disabled = true;
+      try {
+        const r = await api("/api/settings", { method: "POST", body: JSON.stringify(body) });
+        const notice = document.getElementById("settingsNotice");
+        if (!r.ok) { if (notice) notice.textContent = r.error || "Save failed"; return; }
+        if (notice) notice.textContent = "Settings saved.";
+        await refresh();
+      } finally { fullSave.disabled = false; }
     };
   const buy = document.getElementById("btnManualBuy");
   if (buy)
