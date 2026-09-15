@@ -17,6 +17,7 @@ import { buildTokenTerminal } from "../services/token-terminal.js";
 import { buildFilterMilestones } from "../scanner/filters.js";
 import { updateSetting } from "../services/settings.js";
 import { scanner } from "../scanner/scanner-instance.js";
+import { logger } from "../utils/logger.js";
 
 function mapToken(t: any) {
   let reasons: string[] = [];
@@ -448,6 +449,7 @@ export function startHunter(telegramId: number): { ok: boolean; error?: string }
     return { ok: false, error: "Emergency stop is active. Use Clear Kill." };
   }
   updateSettings(telegramId, { auto_state: "running" });
+  void scanner.start().catch((error) => logger.error("Failed to start scanner from hunt control.", error));
   return { ok: true };
 }
 

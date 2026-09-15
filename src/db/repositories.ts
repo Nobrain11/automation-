@@ -26,6 +26,11 @@ export interface AutoSettings {
   updated_at: number;
 }
 
+export function listTelegramUserIds(): number[] {
+  const rows = db.prepare(`SELECT telegram_id FROM users ORDER BY telegram_id`).all() as Array<{ telegram_id: number }>;
+  return rows.map((row) => row.telegram_id);
+}
+
 export function userExists(telegramId: number): boolean {
   const row = db
     .prepare(`SELECT 1 FROM users WHERE telegram_id = ?`)

@@ -8,6 +8,7 @@ import {
   ensureUser,
   getAwaitingInput,
   getSettings,
+  listTelegramUserIds,
   hasReferralRecord,
   setAwaitingInput,
   updateSettings
@@ -230,6 +231,27 @@ function registerHandlers() {
       parse_mode: "HTML",
       reply_markup: scannerKeyboard()
     });
+  });
+
+  bot.command("maintenance", async (ctx) => {
+    const adminId = ctx.from?.id;
+    if (!adminId || !adminTelegramIds().includes(adminId)) return;
+    const message = typeof ctx.match === "string" ? ctx.match.trim() : "";
+    if (!message) {
+      await ctx.reply("Usage: /maintenance Your maintenance message", { parse_mode: "HTML" });
+      return;
+    }
+    const notice = `⚠️ <b>MAINTENANCE NOTICE</b>\n\n${message}\n\nWe will update you when service is restored.`;
+    let delivered = 0;
+    for (const userId of listTelegramUserIds()) {
+      try {
+        await bot.api.sendMessage(userId, notice, { parse_mode: "HTML" });
+        delivered += 1;
+      } catch (error) {
+        logger.warn(`Maintenance notice failed for ${userId}.`, error);
+      }
+    }
+    await ctx.reply(`Maintenance notice sent to ${delivered} users.`);
   });
 
   bot.command("wallet", async (ctx) => {
