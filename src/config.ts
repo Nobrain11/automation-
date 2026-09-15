@@ -18,10 +18,15 @@ function required(name: string): string {
 }
 
 function rpcEndpoint(): string {
-  const value = optional("SOLANA_RPC_URL");
-  return value && /^https?:\/\//i.test(value)
-    ? value
-    : "https://api.mainnet-beta.solana.com";
+  const configured = optional("SOLANA_RPC_URL");
+  if (configured && /^https?:\/\//i.test(configured)) return configured;
+
+  const apiKey = optional("API_KEY");
+  if (apiKey) {
+    return `https://mainnet.helius-rpc.com/?api-key=${encodeURIComponent(apiKey)}`;
+  }
+
+  return "https://api.mainnet-beta.solana.com";
 }
 
 /** Never throw at import time — Vercel loads this module for every route. */
