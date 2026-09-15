@@ -93,16 +93,35 @@ export default async function handler(
         body: JSON.stringify(body)
       }
     );
-    const telegramResult = (await telegramResponse.json()) as Record<
-      string,
-      unknown
-    >;
+    const telegramResult = (await telegramResponse.json()) as Record<string, unknown>;
 
-    const ok = telegramResponse.ok && telegramResult.ok === true;
+    const commands = [
+      { command: "start", description: "Open Pump Auto" },
+      { command: "help", description: "Show help" },
+      { command: "status", description: "View bot and scanner status" },
+      { command: "scanner", description: "View scanner controls" },
+      { command: "wallet", description: "View wallet" },
+      { command: "settings", description: "Open trading settings" },
+      { command: "pnl", description: "View performance" },
+      { command: "admin_test", description: "Test admin notifications" },
+      { command: "maintenance", description: "Broadcast maintenance notice" }
+    ];
+    const commandResponse = await fetch(
+      `https://api.telegram.org/bot${token}/setMyCommands`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ commands })
+      }
+    );
+    const commandResult = (await commandResponse.json()) as Record<string, unknown>;
+
+    const ok = telegramResponse.ok && telegramResult.ok === true && commandResponse.ok && commandResult.ok === true;
     sendJson(res, ok ? 200 : 502, {
       ok,
       webhookUrl,
-      telegram: telegramResult
+      telegram: telegramResult,
+      commands: commandResult
     });
   } catch (error) {
     sendJson(res, 500, {
