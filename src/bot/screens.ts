@@ -3,7 +3,7 @@
 import { getSettings, getReferralStats } from "../db/repositories.js";
 import { getRecentTokens } from "../db/scanner-repository.js";
 import { getAddress, getBalance } from "../services/wallet.js";
-import { scanner } from "../scanner/scanner-instance.js";
+import { isDiscoveryRunning, scanner } from "../scanner/scanner-instance.js";
 
 function shortAddr(addr: string): string {
   if (addr.length < 10) return addr;
@@ -34,7 +34,7 @@ export async function homeText(telegramId: number): Promise<string> {
         ? "● PAUSED"
         : "● READY";
 
-  const scannerLabel = stats.running ? "LIVE" : "OFF";
+  const scannerLabel = isDiscoveryRunning() ? "LIVE" : "OFF";
   const qualified = stats.passed;
   const evaluated = stats.evaluated;
   const discovered = stats.discovered;
@@ -177,7 +177,7 @@ export function statusText(telegramId: number) {
 📡 <b>SYSTEM STATUS</b>
 Bot                 ● ONLINE
 Solana RPC          ● configured
-Scanner             ${stats.running ? "● LIVE" : "● OFF"}
+Scanner             ${isDiscoveryRunning() ? "● LIVE" : "● OFF"}
 Trading Engine      ${hunter}
 Wallet              ${address ? "● CONNECTED" : "● NONE"}
 ━━━━━━━━━━━━━━━━━━━━
@@ -225,7 +225,7 @@ SCAN → FILTER → ENTER
 → MANAGE → EXIT
 
 Current scanner:
-${stats.running ? "LIVE" : "OFF"}
+${isDiscoveryRunning() ? "LIVE" : "OFF"}
 Discovered ${stats.discovered} · Evaluated ${stats.evaluated}
 `.trim();
 }
@@ -496,7 +496,7 @@ export function scannerText(): string {
 
   return `
 🔎 <b>SCANNER</b>
-${stats.running ? "● LIVE" : "● OFF"}
+${isDiscoveryRunning() ? "● LIVE" : "● OFF"}
 Watching new Solana launches.
 ━━━━━━━━━━━━━━━━━━━━
 Discovered ${stats.discovered} · Evaluated ${stats.evaluated}
@@ -514,7 +514,7 @@ export function activityText(): string {
   if (!tokens.length) {
     return `
 📡 <b>ACTIVITY</b>
-${stats.running ? "● LIVE" : "● IDLE"}
+${isDiscoveryRunning() ? "● LIVE" : "● IDLE"}
 
 No activity yet.
 Once the scanner evaluates tokens,
@@ -530,7 +530,7 @@ events will appear here in real time.
 
   return `
 📡 <b>ACTIVITY</b>
-${stats.running ? "● LIVE" : "● IDLE"}
+${isDiscoveryRunning() ? "● LIVE" : "● IDLE"}
 
 ${lines.join("\n")}
 `.trim();
