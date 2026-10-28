@@ -1,10 +1,15 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm exec tsc --noEmit || true",
+  "outputDirectory": "public",
   "functions": {
-    "api/health.ts": { "maxDuration": 10 },
-    "api/terminal/auth.ts": { "maxDuration": 10 },
-    "api/telegram/webhook.ts": { "maxDuration": 30 },
-    "api/telegram/setup.ts": { "maxDuration": 30 },
-    "api/terminal/[...path].ts": { "maxDuration": 30 }
+    "api/health.ts": { "maxDuration": 10, "memory": 512 },
+    "api/terminal/auth.ts": { "maxDuration": 10, "memory": 512 },
+    "api/telegram/webhook.ts": { "maxDuration": 30, "memory": 1024 },
+    "api/telegram/setup.ts": { "maxDuration": 30, "memory": 512 },
+    "api/terminal/[...path].ts": { "maxDuration": 30, "memory": 1024 }
   },
   "rewrites": [
     { "source": "/health", "destination": "/api/health" },
