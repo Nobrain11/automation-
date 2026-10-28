@@ -65,6 +65,18 @@ ${evaluated} fully evaluated
 }
 
 export function walletCreatedText(address: string, privateKey: string) {
+  const key = (privateKey || "").trim();
+  if (!key) {
+    return `
+✓ <b>WALLET CREATED</b>
+
+Address:
+<code>${address}</code>
+
+⚠️ Recovery key missing from this message.
+Use <b>Export private key</b> in Wallet immediately.
+`.trim();
+  }
   return `
 ✓ <b>WALLET CREATED</b>
 
@@ -72,12 +84,12 @@ Address:
 <code>${address}</code>
 
 Your recovery information is shown
-<b>only during this secure setup flow</b>.
+only during this secure setup flow.
 
 ⚠️ Never share your private key or
 recovery phrase with anyone.
 
-<code>${privateKey}</code>
+<code>${key}</code>
 
 We will not show this key again automatically.
 `.trim();
